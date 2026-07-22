@@ -148,13 +148,15 @@ class ChatAgent:
 
             self.usage["cost"].append(res._hidden_params["response_cost"])
             action = self.message_action_parser(message, self.model)
-            print("User Turn:", env.current_user_turn, "Agent Turn:", current_agent_turn, "Agent:", message["content"].strip())
-            self.messages.append({"role": "assistant", "content": message["content"].strip()})
+            content = message.get("content") or ""
+            stripped_content = content.strip()
+            print("User Turn:", env.current_user_turn, "Agent Turn:", current_agent_turn, "Agent:", stripped_content)
+            self.messages.append({"role": "assistant", "content": stripped_content})
             if action is None:
                 self.info["end_reason"] = {
                     "source": "agent",
                     "message": "Invalid action",
-                    "content":  message["content"].strip()
+                    "content":  stripped_content
                 }
                 info["end_reason"] = self.info["end_reason"]
                 if self.strategy == "react":
@@ -184,7 +186,7 @@ class ChatAgent:
                 self.info["end_reason"] = {
                     "source": "agent",
                     "message": "Max turns reached",
-                    "content":  message["content"].strip()
+                    "content":  (message.get("content") or "").strip()
                 }
         self.info["usage"] = self.usage
         self.info["total_cost"] = sum(cost for cost in self.usage["cost"] if cost is not None)
@@ -197,7 +199,7 @@ class ChatAgent:
     @staticmethod
     def message_action_parser(message: str, model_name: str) -> Dict[str, str]:
         action = None
-        content = message["content"].strip()
+        content = (message.get("content") or "").strip()
         # if model_name "deepseek-r1":
         #     content = content.split("</think>")[1]
         resp = parse_wrapped_response(r'<execute>(.*?)</execute>', content).strip()

@@ -13,7 +13,15 @@ import time
 def run():
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
+    judge_model = args.judge_model or args.model
+    judge_provider = args.judge_provider or args.llm_provider
+    user_model = args.user_model or judge_model
+    user_provider = args.user_provider or judge_provider
     ckpt_path = f"{args.log_dir}/results_{args.model}_{args.agent_strategy}_{args.task_category}.json"
+    os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+    print(f"Judge model/provider: {judge_model} / {judge_provider}")
+    if args.interactive:
+        print(f"User simulator model/provider: {user_model} / {user_provider}")
     if args.org_type == "b2b":
         TASKS_NATURAL = TASKS_B2B_INTERACTIVE if args.interactive else TASKS_B2B
         SCHEMA = B2B_SCHEMA
@@ -56,9 +64,22 @@ def run():
                 )
             # This implies agent_strategy is "react" if interactive is True
             
-            env = InteractiveChatEnv(tasks=selected_tasks, max_user_turns=args.max_user_turns, org_type=args.org_type)
+            env = InteractiveChatEnv(
+                tasks=selected_tasks,
+                max_user_turns=args.max_user_turns,
+                org_type=args.org_type,
+                user_model=user_model,
+                user_provider=user_provider,
+                evaluator_model=judge_model,
+                evaluator_provider=judge_provider,
+            )
         else: # Not interactive, both 'act' and 'react' are fine
-            env = ChatEnv(tasks=selected_tasks, org_type=args.org_type)
+            env = ChatEnv(
+                tasks=selected_tasks,
+                org_type=args.org_type,
+                evaluator_model=judge_model,
+                evaluator_provider=judge_provider,
+            )
     elif args.agent_strategy == "tool_call":
         if args.interactive:
             raise NotImplementedError(
@@ -185,6 +206,32 @@ if __name__ == "__main__":
         type=str,
         default="bedrock",
         choices=["bedrock", "together_ai", "openai", "vertex_ai"]
+    )
+    parser.add_argument(
+        "--judge_model",
+        type=str,
+        default=None,
+        help="Model used by evaluator/judge calls. Defaults to --model.",
+    )
+    parser.add_argument(
+        "--judge_provider",
+        type=str,
+        default=None,
+        choices=["bedrock", "together_ai", "openai", "vertex_ai"],
+        help="LiteLLM provider for evaluator/judge calls. Defaults to --llm_provider.",
+    )
+    parser.add_argument(
+        "--user_model",
+        type=str,
+        default=None,
+        help="Model used for interactive CRMArena-Pro user simulation. Defaults to --judge_model or --model.",
+    )
+    parser.add_argument(
+        "--user_provider",
+        type=str,
+        default=None,
+        choices=["bedrock", "together_ai", "openai", "vertex_ai"],
+        help="LiteLLM provider for interactive user simulation. Defaults to --judge_provider or --llm_provider.",
     )
     parser.add_argument(
         "--task_category",

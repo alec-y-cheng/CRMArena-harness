@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from crm_sandbox.agents.utils import get_all_metrics
 import litellm
 import json
+import re
 
 class ChatEnv(object):
     def __init__(
@@ -14,6 +15,8 @@ class ChatEnv(object):
         task_index: Optional[int] = None,
         user_model: str = "gpt-4o-2024-08-06",
         user_provider: Optional[str] = "openai",
+        evaluator_model: Optional[str] = None,
+        evaluator_provider: Optional[str] = None,
         org_type: str = "b2b",
     ) -> None:
         super().__init__()
@@ -27,7 +30,7 @@ class ChatEnv(object):
         self.sf_connector = SalesforceConnector(org_type=org_type)
         self.max_user_turns = 1  # dummy
         self.current_user_turn = 0 # dummy
-        self.evaluator = Evaluator(model=user_model, provider=user_provider)
+        self.evaluator = Evaluator(model=evaluator_model or user_model, provider=evaluator_provider or user_provider)
         
         
     def reset(self, task_index: int = 0):
@@ -186,14 +189,24 @@ class InteractiveChatEnv(ChatEnv):
         task_index: Optional[int] = None,
         user_model: str = "gpt-4o-2024-08-06",
         user_provider: Optional[str] = "openai",
+        evaluator_model: Optional[str] = None,
+        evaluator_provider: Optional[str] = None,
         org_type: str = "b2b",
     ) -> None:
     
-        super().__init__(tasks=tasks, task_index=task_index, org_type=org_type)
+        super().__init__(
+            tasks=tasks,
+            task_index=task_index,
+            user_model=user_model,
+            user_provider=user_provider,
+            evaluator_model=evaluator_model or user_model,
+            evaluator_provider=evaluator_provider or user_provider,
+            org_type=org_type,
+        )
         self.user = LLMUserSimulationEnv(model=user_model, provider=user_provider)
         self.max_user_turns = max_user_turns
         self.current_user_turn = 0
-        self.evaluator = Evaluator(model=user_model, provider=user_provider)
+        self.evaluator = Evaluator(model=evaluator_model or user_model, provider=evaluator_provider or user_provider)
 
     def step(self, action):
         self.actions.append(action)
@@ -417,16 +430,17 @@ class Evaluator(object):
             model=self.model, custom_llm_provider=self.provider, messages=messages
         )
         extracted_answers = res.choices[0].message
+        extracted_content = extracted_answers.content or ""
         try:
-            parsed_answers = json.loads(extracted_answers.content)["extracted_answers"]
+            parsed_answers = json.loads(extracted_content)["extracted_answers"]
         except Exception as e:
             # if cannot directly parse use some heuristic methods. 
-            print(f"Failed to parse JSON: {extracted_answers.content}. Error: {e}. Using heuristics.")
+            print(f"Failed to parse JSON: {extracted_content}. Error: {e}. Using heuristics.")
             parsed_answers = []
             try:
                 # Heuristic 1: Try to find list-like structure using regex
                 # Use re.DOTALL to handle potential newlines in the content
-                match = re.search(r'\[(.*?)\]', extracted_answers.content, re.DOTALL)
+                match = re.search(r'\[(.*?)\]', extracted_content, re.DOTALL)
                 if match:
                     list_content = match.group(1).strip()
                     # Check if the content inside brackets is literally 'None' (case-insensitive)
@@ -445,12 +459,12 @@ class Evaluator(object):
                                  parsed_answers = [cleaned_single_item]
 
                 # Heuristic 2: If no list structure found, check if the entire string is 'None' (case-insensitive)
-                elif extracted_answers.content.strip().lower() == 'none':
+                elif extracted_content.strip().lower() == 'none':
                      parsed_answers = ["None"]
                 # Heuristic 3: Assume the entire content (cleaned) is the single answer
                 else:
                      # Strip whitespace and surrounding quotes
-                     cleaned_content = extracted_answers.content.strip().strip('"').strip("'")
+                     cleaned_content = extracted_content.strip().strip('"').strip("'")
                      # Check if the cleaned content is 'none' again after stripping quotes
                      if cleaned_content.lower() == 'none':
                          parsed_answers = ["None"]
@@ -461,14 +475,14 @@ class Evaluator(object):
                 # Final safety check: If heuristics resulted in an empty list, default to [None]
                 # This covers cases where the input was empty, just whitespace/quotes, or heuristics failed unexpectedly
                 if not parsed_answers:
-                     print(f"Heuristics resulted in empty list for: {extracted_answers.content}. Defaulting to [None].")
+                     print(f"Heuristics resulted in empty list for: {extracted_content}. Defaulting to [None].")
                      parsed_answers = ["None"]
 
             except Exception as heuristic_e:
                  # If any error occurs during the heuristic parsing itself
                  print(f"Heuristic parsing failed with error: {heuristic_e}. Returning raw content or [None].")
                  # Fallback: return the raw content in a list if it's not empty/whitespace, otherwise [None]
-                 raw_content = extracted_answers.content.strip()
+                 raw_content = extracted_content.strip()
                  if raw_content and raw_content.lower() != 'none':
                      parsed_answers = [raw_content]
                  else:
@@ -476,7 +490,7 @@ class Evaluator(object):
                      parsed_answers = ["None"]
                      
         # Convert None to "None"
-        if parsed_answers[0] == None:
+        if not parsed_answers or parsed_answers[0] == None:
             parsed_answers = ["None"]
         return parsed_answers
     
@@ -517,7 +531,8 @@ class Evaluator(object):
             model=self.model, custom_llm_provider=self.provider, messages=messages
         )
         
-        if "yes" in res.choices[0].message.content.strip().lower() :
+        content = res.choices[0].message.content or ""
+        if "yes" in content.strip().lower() :
             return 1
         else:
             return 0
@@ -527,6 +542,8 @@ class Evaluator(object):
     def evaluate(self, proposed_answer: str, gt_answer: List[str], reward_metric: str, task_name: str, action_trajectory: List[str]) -> float:
         
         
+        if not isinstance(gt_answer, list):
+            gt_answer = [gt_answer]
         if gt_answer[0] == None:
             gt_answer = ["None"]
         reward = 0
