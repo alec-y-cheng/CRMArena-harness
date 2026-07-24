@@ -142,3 +142,8 @@ Line-item discounts and matching approval article.
 
 Next action:
 Retrieve line items for this quote.
+
+
+## Changes
+quote clipboard: evidence based, not retrieval deterministic, less context
+try new scaffolding on other tasks
