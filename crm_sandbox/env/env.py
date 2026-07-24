@@ -17,6 +17,8 @@ class ChatEnv(object):
         user_provider: Optional[str] = "openai",
         evaluator_model: Optional[str] = None,
         evaluator_provider: Optional[str] = None,
+        evaluator_base_url: Optional[str] = None,
+        evaluator_api_key: Optional[str] = None,
         org_type: str = "b2b",
     ) -> None:
         super().__init__()
@@ -30,7 +32,12 @@ class ChatEnv(object):
         self.sf_connector = SalesforceConnector(org_type=org_type)
         self.max_user_turns = 1  # dummy
         self.current_user_turn = 0 # dummy
-        self.evaluator = Evaluator(model=evaluator_model or user_model, provider=evaluator_provider or user_provider)
+        self.evaluator = Evaluator(
+            model=evaluator_model or user_model,
+            provider=evaluator_provider or user_provider,
+            api_base=evaluator_base_url,
+            api_key=evaluator_api_key,
+        )
         
         
     def reset(self, task_index: int = 0):
@@ -191,6 +198,10 @@ class InteractiveChatEnv(ChatEnv):
         user_provider: Optional[str] = "openai",
         evaluator_model: Optional[str] = None,
         evaluator_provider: Optional[str] = None,
+        user_base_url: Optional[str] = None,
+        user_api_key: Optional[str] = None,
+        evaluator_base_url: Optional[str] = None,
+        evaluator_api_key: Optional[str] = None,
         org_type: str = "b2b",
     ) -> None:
     
@@ -201,12 +212,24 @@ class InteractiveChatEnv(ChatEnv):
             user_provider=user_provider,
             evaluator_model=evaluator_model or user_model,
             evaluator_provider=evaluator_provider or user_provider,
+            evaluator_base_url=evaluator_base_url,
+            evaluator_api_key=evaluator_api_key,
             org_type=org_type,
         )
-        self.user = LLMUserSimulationEnv(model=user_model, provider=user_provider)
+        self.user = LLMUserSimulationEnv(
+            model=user_model,
+            provider=user_provider,
+            api_base=user_base_url,
+            api_key=user_api_key,
+        )
         self.max_user_turns = max_user_turns
         self.current_user_turn = 0
-        self.evaluator = Evaluator(model=evaluator_model or user_model, provider=evaluator_provider or user_provider)
+        self.evaluator = Evaluator(
+            model=evaluator_model or user_model,
+            provider=evaluator_provider or user_provider,
+            api_base=evaluator_base_url,
+            api_key=evaluator_api_key,
+        )
 
     def step(self, action):
         self.actions.append(action)
@@ -278,11 +301,19 @@ class InteractiveChatEnv(ChatEnv):
     
 
 class Evaluator(object):
-    def __init__(self, model: str, provider: str) -> None:
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self.messages: List[Dict[str, Any]] = []
         self.model = model
         self.provider = provider
+        self.api_base = api_base
+        self.api_key = api_key
         self.total_cost = 0.0
         
         
@@ -426,9 +457,7 @@ class Evaluator(object):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": model_output}
         ]
-        res = litellm.completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
-        )
+        res = self._completion(messages)
         extracted_answers = res.choices[0].message
         extracted_content = extracted_answers.content or ""
         try:
@@ -527,9 +556,7 @@ class Evaluator(object):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": model_output}
         ]
-        res = litellm.completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
-        )
+        res = self._completion(messages)
         
         content = res.choices[0].message.content or ""
         if "yes" in content.strip().lower() :
@@ -581,3 +608,16 @@ class Evaluator(object):
             "parsed_answer": parsed_answers,
             "reward": reward
         }
+
+    def _completion(self, messages: List[Dict[str, Any]]):
+        completion_kwargs = {}
+        if self.api_base:
+            completion_kwargs["api_base"] = self.api_base
+        if self.api_key:
+            completion_kwargs["api_key"] = self.api_key
+        return litellm.completion(
+            model=self.model,
+            custom_llm_provider=self.provider,
+            messages=messages,
+            **completion_kwargs,
+        )

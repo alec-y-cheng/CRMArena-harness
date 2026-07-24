@@ -2,6 +2,7 @@
 import argparse
 import csv
 import json
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -48,9 +49,78 @@ def end_reason(result):
     return info.get("source", ""), info.get("content", ""), info.get("content", "")
 
 
+def result_files(path):
+    if path.is_file():
+        return [path]
+    return sorted(p for p in path.rglob("*.json") if p.is_file())
+
+
+def load_rows(path):
+    rows = []
+    for result_file in result_files(path):
+        with result_file.open() as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            file_rows = data
+        elif isinstance(data, dict) and isinstance(data.get("results"), list):
+            file_rows = data["results"]
+        else:
+            continue
+        for row in file_rows:
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
+def number_value(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def list_sum(value):
+    if not isinstance(value, list):
+        return None
+    total = 0.0
+    found = False
+    for item in value:
+        item_value = number_value(item)
+        if item_value is not None:
+            total += item_value
+            found = True
+    return total if found else None
+
+
+def agent_metric(item, key):
+    info = item.get("agent_info") or {}
+    return number_value(info.get(key))
+
+
+def usage_total(item, key):
+    info = item.get("agent_info") or {}
+    usage = info.get("usage") or {}
+    return list_sum(usage.get(key))
+
+
+def mean(values):
+    values = [value for value in values if value is not None]
+    if not values:
+        return ""
+    return sum(values) / len(values)
+
+
+def fmt(value):
+    if value == "":
+        return ""
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
+
+
 def summarize(path):
-    with path.open() as f:
-        rows = json.load(f)
+    rows = load_rows(path)
 
     groups = defaultdict(list)
     for row in rows:
@@ -73,8 +143,13 @@ def summarize(path):
         invalid_actions = 0
         submitted = 0
         max_turns = 0
+        verifier_failure_events = 0
+        verifier_failure_tasks = 0
+        verifier_unknown_events = 0
+        verifier_unknown_tasks = 0
         for item in items:
             source, message, content = end_reason(item)
+            message = str(message or "unknown")
             reason_counts[message] += 1
             if source == "api" or str(message).startswith("Error:"):
                 api_errors += 1
@@ -89,11 +164,28 @@ def summarize(path):
                     empty_content += 1
             elif message == "SOQL/SOSL query error":
                 query_errors += 1
+            verification_failures = (item.get("agent_info") or {}).get("verification_failures") or []
+            if verification_failures:
+                verifier_failure_tasks += 1
+                verifier_failure_events += len(verification_failures)
+            verification_unknowns = (item.get("agent_info") or {}).get("verification_unknowns") or []
+            if verification_unknowns:
+                verifier_unknown_tasks += 1
+                verifier_unknown_events += len(verification_unknowns)
+
+        successes = sum(1 for value in reward_values if value > 0)
+        model_calls = [agent_metric(item, "model_calls") for item in items]
+        env_steps = [agent_metric(item, "env_steps") for item in items]
+        prompt_tokens = [usage_total(item, "prompt_tokens") for item in items]
+        completion_tokens = [usage_total(item, "completion_tokens") for item in items]
+        total_tokens = [usage_total(item, "total_tokens") for item in items]
 
         summaries.append(
             {
                 "task_type": task_type,
                 "n": len(items),
+                "successes": successes,
+                "success_rate": successes / len(items) if items else "",
                 "submitted": submitted,
                 "max_turns": max_turns,
                 "query_errors": query_errors,
@@ -103,24 +195,91 @@ def summarize(path):
                 "avg_reward": sum(reward_values) / len(reward_values) if reward_values else "",
                 "avg_em": sum(em_values) / len(em_values) if em_values else "",
                 "avg_f1": sum(f1_values) / len(f1_values) if f1_values else "",
-                "nonzero_rewards": sum(1 for value in reward_values if value > 0),
+                "nonzero_rewards": successes,
+                "avg_model_calls": mean(model_calls),
+                "avg_env_steps": mean(env_steps),
+                "avg_prompt_tokens": mean(prompt_tokens),
+                "avg_completion_tokens": mean(completion_tokens),
+                "avg_total_tokens": mean(total_tokens),
+                "verifier_failure_tasks": verifier_failure_tasks,
+                "verifier_failure_events": verifier_failure_events,
+                "verifier_unknown_tasks": verifier_unknown_tasks,
+                "verifier_unknown_events": verifier_unknown_events,
                 "top_end_reasons": "; ".join(f"{k}:{v}" for k, v in reason_counts.most_common(4)),
             }
         )
     return rows, summaries, errors
 
 
+def write_csv(path, summaries, fieldnames):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(summaries)
+
+
+def markdown_table(summaries, fieldnames):
+    lines = []
+    lines.append("| " + " | ".join(fieldnames) + " |")
+    lines.append("| " + " | ".join(["---"] * len(fieldnames)) + " |")
+    for row in summaries:
+        lines.append("| " + " | ".join(fmt(row.get(field, "")) for field in fieldnames) + " |")
+    return "\n".join(lines)
+
+
+def write_markdown(path, source_path, rows, summaries, errors, table_fields, top_errors):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    total = len(rows)
+    total_successes = sum(int(row["successes"]) for row in summaries)
+    total_verifier_events = sum(int(row["verifier_failure_events"]) for row in summaries)
+    total_unknown_events = sum(int(row["verifier_unknown_events"]) for row in summaries)
+    total_api_errors = sum(int(row["api_errors"]) for row in summaries)
+    total_query_errors = sum(int(row["query_errors"]) for row in summaries)
+    total_invalid_actions = sum(int(row["invalid_actions"]) for row in summaries)
+    success_rate = total_successes / total if total else 0.0
+
+    lines = [
+        "# CRMArena Result Summary",
+        "",
+        f"Source: `{source_path}`",
+        "",
+        "## Overall",
+        "",
+        f"- Tasks: {total}",
+        f"- Successes: {total_successes}",
+        f"- Success rate: {success_rate:.4f}",
+        f"- API errors: {total_api_errors}",
+        f"- SOQL/SOSL query-error endings: {total_query_errors}",
+        f"- Invalid-action endings: {total_invalid_actions}",
+        f"- Verifier rejection events: {total_verifier_events}",
+        f"- Verifier unknown/allowed events: {total_unknown_events}",
+        "",
+        "## By Task",
+        "",
+        markdown_table(summaries, table_fields),
+    ]
+    if errors:
+        lines.extend(["", "## Top API/Run Errors", ""])
+        for message, count in errors.most_common(top_errors):
+            lines.append(f"- {count}: {message}")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Summarize CRMArena result JSON files.")
-    parser.add_argument("results_json", type=Path)
+    parser.add_argument("results_path", type=Path, help="A result JSON file or directory containing result JSON files.")
     parser.add_argument("--csv", type=Path, default=None, help="Optional CSV output path.")
+    parser.add_argument("--markdown", type=Path, default=None, help="Optional Markdown summary output path.")
     parser.add_argument("--top-errors", type=int, default=10)
     args = parser.parse_args()
 
-    rows, summaries, errors = summarize(args.results_json)
+    rows, summaries, errors = summarize(args.results_path)
     fieldnames = [
         "task_type",
         "n",
+        "successes",
+        "success_rate",
         "submitted",
         "max_turns",
         "query_errors",
@@ -131,12 +290,21 @@ def main():
         "avg_em",
         "avg_f1",
         "nonzero_rewards",
+        "avg_model_calls",
+        "avg_env_steps",
+        "avg_prompt_tokens",
+        "avg_completion_tokens",
+        "avg_total_tokens",
+        "verifier_failure_tasks",
+        "verifier_failure_events",
+        "verifier_unknown_tasks",
+        "verifier_unknown_events",
         "top_end_reasons",
     ]
 
-    print(f"File: {args.results_json}")
+    print(f"Path: {args.results_path}")
     print(f"Total tasks: {len(rows)}")
-    writer = csv.DictWriter(__import__("sys").stdout, fieldnames=fieldnames)
+    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(summaries)
 
@@ -146,12 +314,11 @@ def main():
             print(f"{count}\t{message}")
 
     if args.csv:
-        args.csv.parent.mkdir(parents=True, exist_ok=True)
-        with args.csv.open("w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(summaries)
+        write_csv(args.csv, summaries, fieldnames)
         print(f"\nWrote CSV: {args.csv}")
+    if args.markdown:
+        write_markdown(args.markdown, args.results_path, rows, summaries, errors, fieldnames, args.top_errors)
+        print(f"Wrote Markdown: {args.markdown}")
 
 
 if __name__ == "__main__":

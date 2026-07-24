@@ -2,17 +2,33 @@ from typing import Optional, List, Dict, Any, Union
 from litellm import completion
 
 class LLMUserSimulationEnv(object):
-    def __init__(self, model: str, provider: str) -> None:
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self.messages: List[Dict[str, Any]] = []
         self.model = model
         self.provider = provider
+        self.api_base = api_base
+        self.api_key = api_key
         self.total_cost = 0.0
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
+        completion_kwargs = {}
+        if self.api_base:
+            completion_kwargs["api_base"] = self.api_base
+        if self.api_key:
+            completion_kwargs["api_key"] = self.api_key
         res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
+            model=self.model,
+            custom_llm_provider=self.provider,
+            messages=messages,
+            **completion_kwargs,
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())

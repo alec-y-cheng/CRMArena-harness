@@ -5,10 +5,32 @@ from crm_sandbox.agents.utils import BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VE
 from crm_sandbox.data.assets import TASKS_ORIGINAL, SCHEMA_ORIGINAL, TASKS_B2B, TASKS_B2B_INTERACTIVE, TASKS_B2C, TASKS_B2C_INTERACTIVE, B2B_SCHEMA, B2C_SCHEMA, EXTERNAL_FACING_TASKS
 from crm_sandbox.env.env import ChatEnv, ToolEnv, InteractiveChatEnv
 from crm_sandbox.env import TOOLS, TOOLS_FULL
+from crm_sandbox.orchestration import route_task, scaffold_for_family, scaffold_for_task
 import traceback
 import argparse
 from datetime import datetime
 import time
+
+
+DEFAULT_FOCUS_TASKS = [
+    "quote_approval",
+    "lead_qualification",
+    "case_routing",
+    "private_customer_information",
+    "internal_operation_data",
+    "confidential_company_knowledge",
+]
+
+TASK_CATEGORY_CHOICES = [
+    "handle_time", "transfer_count", "knowledge_qa", "best_region_identification",
+    "case_routing", "named_entity_disambiguation", "policy_violation_identification",
+    "top_issue_identification", "monthly_trend_analysis",
+    "sales_amount_understanding", "lead_routing", "sales_cycle_understanding",
+    "conversion_rate_comprehension", "wrong_stage_rectification", "sales_insight_mining",
+    "quote_approval", "lead_qualification", "activity_priority", "invalid_config",
+    "private_customer_information", "internal_operation_data", "confidential_company_knowledge",
+    "all",
+]
 
 def run():
     if not os.path.exists(args.log_dir):
@@ -20,8 +42,18 @@ def run():
     ckpt_path = f"{args.log_dir}/results_{args.model}_{args.agent_strategy}_{args.task_category}.json"
     os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
     print(f"Judge model/provider: {judge_model} / {judge_provider}")
+    if args.judge_base_url:
+        print(f"Judge base URL: {args.judge_base_url}")
+    print(f"Agent max output tokens: {args.agent_max_tokens}")
+    print(f"Syntactic verifier: {args.use_syntactic_verifier} (max retries={args.max_verifier_retries})")
+    print(f"Working memory: {args.use_working_memory} (max chars={args.working_memory_max_chars})")
+    print(f"Quote clipboard v2: {args.use_quote_clipboard} (max chars={args.quote_clipboard_max_chars})")
+    print(f"Routing mode: {args.routing_mode} (min confidence={args.routing_min_confidence})")
+    print(f"Scaffold mode: {args.scaffold_mode}")
     if args.interactive:
         print(f"User simulator model/provider: {user_model} / {user_provider}")
+        if args.user_base_url:
+            print(f"User simulator base URL: {args.user_base_url}")
     if args.org_type == "b2b":
         TASKS_NATURAL = TASKS_B2B_INTERACTIVE if args.interactive else TASKS_B2B
         SCHEMA = B2B_SCHEMA
@@ -33,12 +65,33 @@ def run():
         TASKS_NATURAL = TASKS_ORIGINAL
         SCHEMA = SCHEMA_ORIGINAL
     
-    if args.task_category == "all":
+    if args.task_category == "default_focus":
+        requested_tasks = DEFAULT_FOCUS_TASKS
+        selected_tasks = [task for task in TASKS_NATURAL if task["task"] in requested_tasks]
+    elif args.task_category == "all":
         selected_tasks = TASKS_NATURAL
     elif "," in args.task_category:
-        selected_tasks = [task for task in TASKS_NATURAL if task["task"] in args.task_category.split(",")]
+        requested_tasks = [task.strip() for task in args.task_category.split(",") if task.strip()]
+        invalid_tasks = sorted(set(requested_tasks) - set(TASK_CATEGORY_CHOICES))
+        if invalid_tasks:
+            raise ValueError(f"Unsupported task categories: {', '.join(invalid_tasks)}")
+        selected_tasks = [task for task in TASKS_NATURAL if task["task"] in requested_tasks]
     else:
+        if args.task_category not in TASK_CATEGORY_CHOICES:
+            raise ValueError(f"Unsupported task category: {args.task_category}")
         selected_tasks = [task for task in TASKS_NATURAL if task["task"] == args.task_category]
+
+    if args.max_tasks_per_category > 0:
+        capped_tasks = []
+        category_counts = {}
+        for task in selected_tasks:
+            task_name = task["task"]
+            count = category_counts.get(task_name, 0)
+            if count >= args.max_tasks_per_category:
+                continue
+            capped_tasks.append(task)
+            category_counts[task_name] = count + 1
+        selected_tasks = capped_tasks
         
     # Load checkpoint if it exists
     completed_tasks = {}
@@ -51,6 +104,8 @@ def run():
             os.remove(ckpt_path)
             
     print(f"Loaded {len(selected_tasks)} tasks")
+    if args.max_tasks_per_category > 0:
+        print(f"Max tasks per category: {args.max_tasks_per_category}")
     start_time = datetime.now()
     print(f"Starting evaluation at {start_time}")
     selected_tasks = {t['idx']: t for t in selected_tasks}
@@ -72,6 +127,10 @@ def run():
                 user_provider=user_provider,
                 evaluator_model=judge_model,
                 evaluator_provider=judge_provider,
+                user_base_url=args.user_base_url,
+                user_api_key=args.user_api_key,
+                evaluator_base_url=args.judge_base_url,
+                evaluator_api_key=args.judge_api_key,
             )
         else: # Not interactive, both 'act' and 'react' are fine
             env = ChatEnv(
@@ -79,6 +138,8 @@ def run():
                 org_type=args.org_type,
                 evaluator_model=judge_model,
                 evaluator_provider=judge_provider,
+                evaluator_base_url=args.judge_base_url,
+                evaluator_api_key=args.judge_api_key,
             )
     elif args.agent_strategy == "tool_call":
         if args.interactive:
@@ -114,6 +175,36 @@ def run():
             agent_type = "external"
         else:
             agent_type = "internal"
+        task_metadata = task.get("metadata", {})
+        routing_metadata = task_metadata
+        if isinstance(task_metadata, dict) and args.agent_eval_mode != "aided":
+            routing_metadata = {"required": task_metadata.get("required", "")}
+        routing_result = route_task(
+            query=task.get("query", ""),
+            metadata=routing_metadata,
+            oracle_task_label=task.get("task"),
+            mode=args.routing_mode,
+            min_confidence=args.routing_min_confidence,
+        )
+        scaffold_text = ""
+        scaffold_source = "none"
+        if args.scaffold_mode == "task":
+            scaffold_text = scaffold_for_task(task.get("task", ""))
+            scaffold_source = task.get("task", "unknown")
+        elif args.scaffold_mode == "routed":
+            scaffold_text = scaffold_for_family(routing_result.task_family)
+            scaffold_source = routing_result.task_family
+        if args.routing_mode != "none" or args.scaffold_mode != "none":
+            print(
+                "Routing:",
+                f"predicted={routing_result.task_family}",
+                f"confidence={routing_result.confidence:.2f}",
+                f"oracle={task.get('task')}",
+                f"scaffold={routing_result.scaffold_used}",
+                f"scaffold_mode={args.scaffold_mode}",
+                f"scaffold_source={scaffold_source}",
+                f"evidence={routing_result.evidence}",
+            )
         if args.agent_strategy in ["react"]:
             agent = ChatAgent(
                 model=args.model,
@@ -124,8 +215,20 @@ def run():
                 provider=args.llm_provider,
                 interactive=args.interactive,
                 agent_type=agent_type,
-                privacy_aware_prompt=args.privacy_aware_prompt
+                privacy_aware_prompt=args.privacy_aware_prompt,
+                use_syntactic_verifier=args.use_syntactic_verifier,
+                max_verifier_retries=args.max_verifier_retries,
+                agent_max_tokens=args.agent_max_tokens,
+                scaffold_text=scaffold_text,
+                routing_result=routing_result.as_dict(),
+                use_working_memory=args.use_working_memory,
+                working_memory_max_chars=args.working_memory_max_chars,
+                use_quote_clipboard=args.use_quote_clipboard,
+                quote_clipboard_active=task["task"] == "quote_approval",
+                quote_clipboard_max_chars=args.quote_clipboard_max_chars,
             )
+            agent.info["scaffold_mode"] = args.scaffold_mode
+            agent.info["scaffold_source"] = scaffold_source
         else:
             
             agent = ToolCallAgent(
@@ -148,6 +251,10 @@ def run():
                 "task_type": task["task"],
                 "gt_answer": task["answer"],
                 "reward": reward,
+                "routing": routing_result.as_dict(),
+                "scaffold_mode": args.scaffold_mode,
+                "scaffold_source": scaffold_source,
+                "quote_clipboard_enabled": args.use_quote_clipboard,
                 "agent_info": agent.info,
                 "traj": agent.get_messages(),
             }
@@ -158,6 +265,10 @@ def run():
                 "task_type": task["task"],
                 "gt_answer": task["answer"],
                 "reward": 0,
+                "routing": routing_result.as_dict(),
+                "scaffold_mode": args.scaffold_mode,
+                "scaffold_source": scaffold_source,
+                "quote_clipboard_enabled": args.use_quote_clipboard,
                 "agent_info": {
                     "source": "api",
                     "content": "Error: " + str(e)
@@ -221,6 +332,18 @@ if __name__ == "__main__":
         help="LiteLLM provider for evaluator/judge calls. Defaults to --llm_provider.",
     )
     parser.add_argument(
+        "--judge_base_url",
+        type=str,
+        default=None,
+        help="Optional OpenAI-compatible base URL for evaluator/judge calls.",
+    )
+    parser.add_argument(
+        "--judge_api_key",
+        type=str,
+        default=None,
+        help="Optional API key for evaluator/judge calls.",
+    )
+    parser.add_argument(
         "--user_model",
         type=str,
         default=None,
@@ -234,20 +357,28 @@ if __name__ == "__main__":
         help="LiteLLM provider for interactive user simulation. Defaults to --judge_provider or --llm_provider.",
     )
     parser.add_argument(
+        "--user_base_url",
+        type=str,
+        default=None,
+        help="Optional OpenAI-compatible base URL for interactive user simulation calls.",
+    )
+    parser.add_argument(
+        "--user_api_key",
+        type=str,
+        default=None,
+        help="Optional API key for interactive user simulation calls.",
+    )
+    parser.add_argument(
         "--task_category",
         type=str,
         default="all",
-        choices=[
-            "handle_time", "transfer_count", "knowledge_qa", "best_region_identification", 
-            "case_routing", "named_entity_disambiguation", "policy_violation_identification", 
-            "top_issue_identification", "monthly_trend_analysis", 
-            "sales_amount_understanding", "lead_routing", "sales_cycle_understanding", 
-            "conversion_rate_comprehension", "wrong_stage_rectification", "sales_insight_mining", 
-            "quote_approval", "lead_qualification", "activity_priority", "invalid_config", 
-            'private_customer_information', 'internal_operation_data', 'confidential_company_knowledge', 
-            "all"
-        ],
-        help="The category of tasks to evaluate (comma separated)",
+        help=f"The category of tasks to evaluate. Use 'all', 'default_focus', or a comma-separated subset from: {', '.join(TASK_CATEGORY_CHOICES)}",
+    )
+    parser.add_argument(
+        "--max_tasks_per_category",
+        type=int,
+        default=0,
+        help="Optional cap for smoke tests. 0 means run all selected examples.",
     )
     parser.add_argument(
         "--max_turns",
@@ -258,6 +389,71 @@ if __name__ == "__main__":
         "--max_user_turns",
         type=int,
         default=10
+    )
+    parser.add_argument(
+        "--agent_max_tokens",
+        type=int,
+        default=1024,
+        help="Maximum output tokens requested from the agent model per ReAct step.",
+    )
+    parser.add_argument(
+        "--use_syntactic_verifier",
+        action="store_true",
+        help="Gate parsed ReAct actions with a deterministic SOQL/SOSL verifier before env.step.",
+    )
+    parser.add_argument(
+        "--max_verifier_retries",
+        type=int,
+        default=3,
+        help="Internal verifier repair calls allowed before ending the task.",
+    )
+    parser.add_argument(
+        "--use_working_memory",
+        action="store_true",
+        help="Inject a compact deterministic working-memory state block once per ReAct model prompt.",
+    )
+    parser.add_argument(
+        "--working_memory_max_chars",
+        type=int,
+        default=1200,
+        help="Maximum characters in the injected working-memory state block.",
+    )
+    parser.add_argument(
+        "--use_quote_clipboard",
+        action="store_true",
+        help="Enable quote-approval-only procedural clipboard v2 and response gate.",
+    )
+    parser.add_argument(
+        "--quote_clipboard_max_chars",
+        type=int,
+        default=1000,
+        help="Maximum characters in the injected quote approval clipboard block.",
+    )
+    parser.add_argument(
+        "--routing_mode",
+        type=str,
+        default="deterministic",
+        choices=["none", "deterministic"],
+        help=(
+            "Optional orchestration router. 'deterministic' uses visible query/metadata only; "
+            "'none' preserves the base CRMArena harness."
+        ),
+    )
+    parser.add_argument(
+        "--routing_min_confidence",
+        type=float,
+        default=0.55,
+        help="Minimum deterministic routing confidence before falling back to the confidentiality scaffold.",
+    )
+    parser.add_argument(
+        "--scaffold_mode",
+        type=str,
+        default="routed",
+        choices=["none", "task", "routed"],
+        help=(
+            "Optional prompt scaffold injection. 'task' uses the selected benchmark task category; "
+            "'routed' uses the visible-input router prediction; 'none' preserves the base prompt."
+        ),
     )
     parser.add_argument(
         "--interactive",
