@@ -5,7 +5,7 @@ litellm.set_verbose = False
 from typing import Dict, List, Optional
 import time, traceback
 from crm_sandbox.agents.prompts import SCHEMA_STRING, REACT_RULE_STRING, ACT_RULE_STRING, SYSTEM_METADATA, REACT_EXTERNAL_INTERACTIVE_PROMPT, REACT_INTERNAL_INTERACTIVE_PROMPT, REACT_INTERNAL_PROMPT, REACT_EXTERNAL_PROMPT, REACT_PRIVACY_AWARE_EXTERNAL_PROMPT, REACT_PRIVACY_AWARE_EXTERNAL_INTERACTIVE_PROMPT, ACT_PROMPT
-from crm_sandbox.agents.clipboards import QuoteApprovalClipboard
+from crm_sandbox.agents.clipboards import LeadQualificationClipboard, QuoteApprovalClipboard
 from crm_sandbox.agents.utils import parse_wrapped_response, BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP
 from crm_sandbox.agents.working_memory import WorkingMemory
 from verifiers import ActionVerifier
@@ -37,6 +37,9 @@ class ChatAgent:
         use_quote_clipboard=False,
         quote_clipboard_active=False,
         quote_clipboard_max_chars=1000,
+        use_lead_clipboard=False,
+        lead_clipboard_active=False,
+        lead_clipboard_max_chars=1000,
     ):
         schema = self._build_schema(schema_obj)
         assert strategy in ["react", "act"], "Only react and act strategies supported for now"
@@ -86,6 +89,13 @@ class ChatAgent:
         self.quote_clipboard = (
             QuoteApprovalClipboard(max_chars=quote_clipboard_max_chars)
             if self.quote_clipboard_active
+            else None
+        )
+        self.use_lead_clipboard = use_lead_clipboard
+        self.lead_clipboard_active = bool(use_lead_clipboard and lead_clipboard_active)
+        self.lead_clipboard = (
+            LeadQualificationClipboard(max_chars=lead_clipboard_max_chars)
+            if self.lead_clipboard_active
             else None
         )
        
@@ -139,6 +149,8 @@ class ChatAgent:
             self.working_memory.reset(args["query"], self.routing_result)
         if self.quote_clipboard is not None:
             self.quote_clipboard.reset(args["query"], self.routing_result)
+        if self.lead_clipboard is not None:
+            self.lead_clipboard.reset(args["query"], self.routing_result)
         
     def act(self, env, index=None, temperature=0.0):
         query, metadata = env.reset(task_index=index)
@@ -157,6 +169,9 @@ class ChatAgent:
         self.info["quote_clipboard_active"] = self.quote_clipboard_active
         self.info["quote_clipboard_snapshots"] = []
         self.info["quote_clipboard_gate_failures"] = []
+        self.info["lead_clipboard_enabled"] = self.use_lead_clipboard
+        self.info["lead_clipboard_active"] = self.lead_clipboard_active
+        self.info["lead_clipboard_snapshots"] = []
         if self.working_memory is not None:
             self.info["working_memory_snapshots"].append(
                 {
@@ -168,6 +183,8 @@ class ChatAgent:
             )
         if self.quote_clipboard is not None:
             self._record_quote_clipboard_snapshot(0, "reset")
+        if self.lead_clipboard is not None:
+            self._record_lead_clipboard_snapshot(0, "reset")
         self.info["model_calls"] = 0
         self.info["env_steps"] = 0
         self.info["verification_failures"] = []
@@ -281,6 +298,9 @@ class ChatAgent:
                 if self.quote_clipboard is not None:
                     self.quote_clipboard.record_verifier_failure(action, verification.error_code)
                     self._record_quote_clipboard_snapshot(current_agent_turn, "verifier_failure")
+                if self.lead_clipboard is not None:
+                    self.lead_clipboard.record_verifier_failure(action, verification.error_code)
+                    self._record_lead_clipboard_snapshot(current_agent_turn, "verifier_failure")
                 if verifier_attempt >= self.max_verifier_retries:
                     self.info["end_reason"] = {
                         "source": "verifier",
@@ -327,6 +347,9 @@ class ChatAgent:
             if self.quote_clipboard is not None:
                 self.quote_clipboard.record_env_step(action, obs, info)
                 self._record_quote_clipboard_snapshot(current_agent_turn, f"accepted_{action['name']}")
+            if self.lead_clipboard is not None:
+                self.lead_clipboard.record_env_step(action, obs, info)
+                self._record_lead_clipboard_snapshot(current_agent_turn, f"accepted_{action['name']}")
             
             if "observation_size" in info:
                 self.info["observation_sizes"].append(info["observation_size"])
@@ -364,7 +387,7 @@ class ChatAgent:
         return self.messages
 
     def _messages_with_working_memory(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
-        if self.working_memory is None and self.quote_clipboard is None:
+        if self.working_memory is None and self.quote_clipboard is None and self.lead_clipboard is None:
             return list(messages)
         extra_messages = []
         if self.working_memory is not None:
@@ -388,6 +411,18 @@ class ChatAgent:
                         "It tracks what evidence has been retrieved, not whether the quote complies. "
                         "Do not copy this block into the final answer.\n\n"
                         f"{self.quote_clipboard.render()}"
+                    ),
+                }
+            )
+        if self.lead_clipboard is not None:
+            extra_messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Use this lead qualification clipboard as deterministic retrieval state. "
+                        "It tracks BANT-relevant evidence, not whether the lead qualifies. "
+                        "Do not copy this block into the final answer.\n\n"
+                        f"{self.lead_clipboard.render()}"
                     ),
                 }
             )
@@ -488,6 +523,19 @@ class ChatAgent:
                 "stage": self.quote_clipboard.state.stage,
                 "state": self.quote_clipboard.as_dict(),
                 "rendered": self.quote_clipboard.render(),
+            }
+        )
+
+    def _record_lead_clipboard_snapshot(self, turn, event):
+        if self.lead_clipboard is None:
+            return
+        self.info["lead_clipboard_snapshots"].append(
+            {
+                "turn": turn,
+                "event": event,
+                "stage": self.lead_clipboard.state.stage,
+                "state": self.lead_clipboard.as_dict(),
+                "rendered": self.lead_clipboard.render(),
             }
         )
 

@@ -53,6 +53,8 @@ USE_WORKING_MEMORY="${USE_WORKING_MEMORY:-false}"
 WORKING_MEMORY_MAX_CHARS="${WORKING_MEMORY_MAX_CHARS:-1200}"
 USE_QUOTE_CLIPBOARD="${USE_QUOTE_CLIPBOARD:-false}"
 QUOTE_CLIPBOARD_MAX_CHARS="${QUOTE_CLIPBOARD_MAX_CHARS:-1000}"
+USE_LEAD_CLIPBOARD="${USE_LEAD_CLIPBOARD:-false}"
+LEAD_CLIPBOARD_MAX_CHARS="${LEAD_CLIPBOARD_MAX_CHARS:-1000}"
 ROUTING_MODE="${ROUTING_MODE:-deterministic}"
 ROUTING_MIN_CONFIDENCE="${ROUTING_MIN_CONFIDENCE:-0.55}"
 SCAFFOLD_MODE="${SCAFFOLD_MODE:-routed}"
@@ -150,10 +152,16 @@ if [[ "$USE_QUOTE_CLIPBOARD" == "true" ]]; then
   QUOTE_CLIPBOARD_ARG=(--use_quote_clipboard)
   QUOTE_CLIPBOARD_LABEL="_clipboardv2"
 fi
+LEAD_CLIPBOARD_ARG=()
+LEAD_CLIPBOARD_LABEL=""
+if [[ "$USE_LEAD_CLIPBOARD" == "true" ]]; then
+  LEAD_CLIPBOARD_ARG=(--use_lead_clipboard)
+  LEAD_CLIPBOARD_LABEL="_leadclipboard"
+fi
 
 for ORG_TYPE in "${ORG_TYPES[@]}"; do
   for TASK_CATEGORY in "${TASKS[@]}"; do
-    FEATURE_SUFFIX="${RESULT_SUFFIX:-_${VERIFIER_LABEL}_${MEMORY_LABEL}${QUOTE_CLIPBOARD_LABEL}}"
+    FEATURE_SUFFIX="${RESULT_SUFFIX:-_${VERIFIER_LABEL}_${MEMORY_LABEL}${QUOTE_CLIPBOARD_LABEL}${LEAD_CLIPBOARD_LABEL}}"
     RESULT_DIR="results/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${RUN_TAG}${FEATURE_SUFFIX}"
     LOG_DIR="logs/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${RUN_TAG}${FEATURE_SUFFIX}"
     mkdir -p "$RESULT_DIR" "$LOG_DIR"
@@ -168,6 +176,7 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
     echo "  syntactic_verifier=$USE_SYNTACTIC_VERIFIER max_verifier_retries=$MAX_VERIFIER_RETRIES"
     echo "  working_memory=$USE_WORKING_MEMORY max_chars=$WORKING_MEMORY_MAX_CHARS"
     echo "  quote_clipboard=$USE_QUOTE_CLIPBOARD max_chars=$QUOTE_CLIPBOARD_MAX_CHARS"
+    echo "  lead_clipboard=$USE_LEAD_CLIPBOARD max_chars=$LEAD_CLIPBOARD_MAX_CHARS"
     echo "  routing_mode=$ROUTING_MODE routing_min_confidence=$ROUTING_MIN_CONFIDENCE"
     echo "  scaffold_mode=$SCAFFOLD_MODE"
     echo "  log=$LOG_FILE"
@@ -195,12 +204,14 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
       --max_verifier_retries "$MAX_VERIFIER_RETRIES" \
       --working_memory_max_chars "$WORKING_MEMORY_MAX_CHARS" \
       --quote_clipboard_max_chars "$QUOTE_CLIPBOARD_MAX_CHARS" \
+      --lead_clipboard_max_chars "$LEAD_CLIPBOARD_MAX_CHARS" \
       --routing_mode "$ROUTING_MODE" \
       --routing_min_confidence "$ROUTING_MIN_CONFIDENCE" \
       --scaffold_mode "$SCAFFOLD_MODE" \
       "${VERIFIER_ARG[@]}" \
       "${MEMORY_ARG[@]}" \
       "${QUOTE_CLIPBOARD_ARG[@]}" \
+      "${LEAD_CLIPBOARD_ARG[@]}" \
       --reuse_results \
       --privacy_aware_prompt "$PRIVACY_AWARE_PROMPT" \
       --org_type "$ORG_TYPE" > "$LOG_FILE" 2>&1 &

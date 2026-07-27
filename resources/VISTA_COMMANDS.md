@@ -49,7 +49,7 @@ cd /work/11669/aleccheng/vista/CRMArena && source .venv/bin/activate && export H
 cd /work/11669/aleccheng/vista/CRMArena && source .venv/bin/activate && python scripts/summarize_crmarena_results.py results/original/react_qwen35_all_smoke/results_openai/Qwen3.5-35B-A3B_react_all.json
 ```
 ## Serve LLAMA
-cd /work/11669/aleccheng/vista/qwen_agent_ft && sbatch -A ECS24025 -t 8:00:00 scripts/vista_serve_llama31_8b_vllm.sbatch scripts/configs/serve_llama31_8b_vista_config.yaml
+cd /worak/11669/aleccheng/vista/qwen_agent_ft && sbatch -A ECS24025 -t 8:00:00 scripts/vista_serve_llama31_8b_vllm.sbatch scripts/configs/serve_llama31_8b_vista_config.yaml
 
 ## Then Test
 LLAMA_HOST=$(cat /work/11669/aleccheng/vista/qwen_agent_ft/llama31_8b_crmarena_judge_user_vllm_host.txt) && curl http://$LLAMA_HOST:8002/v1/models
@@ -161,5 +161,10 @@ srun -p gh -A ECS24025 --jobid=859621 --overlap -N 1 -n 1 -c 1 -t 03:00:00 bash 
 
 ```bash
 
-cd /work/11669/aleccheng/vista/CRMArena && source .venv/bin/activate && PYTHONPATH=. python scripts/summarize_crmarena_results.py results/b2b_multi-turn/react_openai_Qwen3.5-35B-A3B_base_full_unmodified_q35_859621_llama_859619_noverifier_nowm --csv results/b2b_multi-turn/summaries/base_full_unmodified_q35_859621_llama_859619_deduped_summary.csv --markdown results/b2b_multi-turn/summaries/base_full_unmodified_q35_859621_llama_859619_deduped_summary.md
+cd /work/11669/aleccheng/vista/CRMArena && mkdir -p logs/run_wrappers && source .venv/bin/activate && RUN_ID=ablation30_clipboardv2_scaffold_syntaxold_$(date +%Y%m%d_%H%M) && nohup env BASE_TAG_PREFIX=$RUN_ID LLAMA_HOST=c611-001.vista.tacc.utexas.edu LLAMA_PORT=8002 AGENT_BASE_URL=http://127.0.0.1:8001/v1 ./run_tasks_crmarena_pro_ablation_smoke.sh > logs/run_wrappers/${RUN_ID}.log 2>&1 < /dev/null & echo $!
   ```
+
+
+```bash
+cd /work/11669/aleccheng/vista/CRMArena && mkdir -p logs/run_wrappers && source .venv/bin/activate && RUN_NAME=quoteleadv3_$(date +%Y%m%d_%H%M) && nohup env AGENT_MODEL=openai/Qwen3.5-35B-A3B AGENT_BASE_URL=http://127.0.0.1:8001/v1 AGENT_API_KEY=dummy USE_LLAMA_JUDGE=true LLAMA_HOST=c640-012 LLAMA_PORT=8002 LLAMA_MODEL=meta-llama/Llama-3.1-8B-Instruct TASKS_CSV=quote_approval,lead_qualification ORG_TYPES_CSV=b2b INTERACTIVE=true MAX_TASKS_PER_CATEGORY=30 MAX_TURNS=20 MAX_USER_TURNS=10 AGENT_MAX_TOKENS=950 USE_QUOTE_CLIPBOARD=true QUOTE_CLIPBOARD_MAX_CHARS=1000 USE_LEAD_CLIPBOARD=true LEAD_CLIPBOARD_MAX_CHARS=1000 USE_SYNTACTIC_VERIFIER=false USE_WORKING_MEMORY=false ROUTING_MODE=none SCAFFOLD_MODE=task PRIVACY_AWARE_PROMPT=false MAX_JOBS=1 RUN_TAG=$RUN_NAME ./run_tasks_crmarena_pro.sh > logs/run_wrappers/${RUN_NAME}.log 2>&1 < /dev/null &
+```

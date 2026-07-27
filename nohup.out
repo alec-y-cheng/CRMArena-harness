@@ -1,2 +1,192 @@
 setsid: no command specified
 Try 'setsid --help' for more information.
+SHELL=/bin/bash
+TACC_UCX_INC=/opt/apps/ucx/1.20.0/include
+TACC_FAMILY_COMPILER_VERSION=24.7
+PKG_CONFIG_PATH=/opt/apps/nvidia24/openmpi/5.0.5/lib/pkgconfig
+HISTSIZE=1000
+HOSTNAME=c640-091.vista.tacc.utexas.edu
+FPATH=/opt/apps/lmod/lmod/init/ksh_funcs
+NODE_OPTIONS=--disable-wasm-trap-handler
+TACC_CMAKE_DIR=/home1/apps/cmake/4.1.1
+_ModuleTable007_=fQo=
+_ModuleTable002_=ICJjbWFrZS80LjEuMSIsCmxvYWRPcmRlciA9IDYsCnByb3BUID0ge30sCnN0YWNrRGVwdGggPSAxLApzdGF0dXMgPSAiYWN0aXZlIiwKdXNlck5hbWUgPSAiY21ha2UiLAp3ViA9ICIwMDAwMDAwMDQuMDAwMDAwMDAxLjAwMDAwMDAwMS4qemZpbmFsIiwKfSwKbnZpZGlhID0gewphY3Rpb25BID0gewpbW3ByZXBlbmRfcGF0aCgiTU9EVUxFUEFUSCIsIi9vcHQvYXBwcy9udmlkaWEyNC9tb2R1bGVmaWxlcyIpXV0sCn0sCmZuID0gIi9vcHQvYXBwcy9tb2R1bGVmaWxlcy9udmlkaWEvMjQuNy5sdWEiLApmdWxsTmFtZSA9ICJudmlkaWEvMjQuNyIsCmxvYWRPcmRlciA9IDEsCnByb3BUID0ge30sCnN0YWNrRGVwdGggPSAxLApzdGF0dXMgPSAiYWN0aXZlIiwKdXNlck5hbWUgPSAi
+XALT_SAMPLING=yes
+__LMOD_REF_COUNT_MODULEPATH=/opt/apps/nvidia24/openmpi5/modulefiles:1;/opt/apps/nvidia24/nvpl24/modulefiles:1;/opt/apps/nvidia24/modulefiles:1;/opt/apps/modulefiles:1
+NVIDIA_LIB=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/lib
+CPP=cpp
+_ModuleTable005_=L21vZHVsZWZpbGVzL3VjYy8xLjcuMC5sdWEiLApmdWxsTmFtZSA9ICJ1Y2MvMS43LjAiLApsb2FkT3JkZXIgPSAzLApwcm9wVCA9IHt9LApzdGFja0RlcHRoID0gMSwKc3RhdHVzID0gImFjdGl2ZSIsCnVzZXJOYW1lID0gInVjYyIsCndWID0gIjAwMDAwMDAwMS4wMDAwMDAwMDcuKnpmaW5hbCIsCn0sCnVjeCA9IHsKZm4gPSAiL29wdC9hcHBzL21vZHVsZWZpbGVzL3VjeC8xLjIwLjAubHVhIiwKZnVsbE5hbWUgPSAidWN4LzEuMjAuMCIsCmxvYWRPcmRlciA9IDQsCnByb3BUID0ge30sCnN0YWNrRGVwdGggPSAxLApzdGF0dXMgPSAiYWN0aXZlIiwKdXNlck5hbWUgPSAidWN4IiwKd1YgPSAiMDAwMDAwMDAxLjAwMDAwMDAyMC4qemZpbmFsIiwKfSwKeGFsdCA9IHsKZm4gPSAi
+COMPILER_PATH=/opt/apps/xalt/xalt/bin
+TACC_UCC_INC=/opt/apps/ucc/1.7.0/include
+LMOD_DIR=/opt/apps/lmod/lmod/libexec
+PWD=/work/11669/aleccheng/vista/CRMArena
+TACC_FAMILY_COMPILER=nvidia
+LOGNAME=aleccheng
+XDG_SESSION_TYPE=tty
+TACC_NODE_TYPE=gh
+MODULESHOME=/opt/apps/lmod/lmod
+MANPATH=/usr/local/man:/usr/share/man:/usr/X11R6/man:/usr/kerberos/man:/usr/man:/opt/apps/nvidia24/openmpi/5.0.5/share/man:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/man::
+TACC_FAMILY_COMPILER_VERSION_MAJOR=24
+TACC_XALT_BIN=/opt/apps/xalt/xalt/bin
+COBBLER_SERVER=129.114.16.1
+TACC_UCX_DIR=/opt/apps/ucx/1.20.0
+CXX=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin/nvc++
+TACC_CXX=nvc++
+__LMOD_REF_COUNT_CMAKE_PREFIX_PATH=/home1/apps/cmake/4.1.1:1
+__LMOD_REF_COUNT_INCLUDE=/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/include:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/include:1
+MOTD_SHOWN=pam
+TACC_NVPL_DIR=/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl
+LD_PRELOAD=/opt/apps/xalt/xalt/lib64/libxalt_init.so
+__LMOD_REF_COUNT_PATH=/opt/apps/xalt/xalt/bin:1;/home1/apps/cmake/4.1.1/bin:1;/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/one-sided:1;/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/collective:1;/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/pt2pt:1;/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/startup:1;/opt/apps/nvidia24/openmpi/5.0.5/bin:1;/opt/apps/ucx/1.20.0/bin:1;/opt/apps/ucc/1.7.0/bin:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/extras/qd/bin:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin:1;/usr/local/bin:1;/usr/bin:1;/usr/local/sbin:1;/usr/sbin:1;.:1
+HOME=/home1/11669/aleccheng
+_ModuleTable_Sz_=7
+SSH_ASKPASS=/usr/libexec/openssh/gnome-ssh-askpass
+LANG=en_US.UTF-8
+LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=01;37;41:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=01;36:*.au=01;36:*.flac=01;36:*.m4a=01;36:*.mid=01;36:*.midi=01;36:*.mka=01;36:*.mp3=01;36:*.mpc=01;36:*.ogg=01;36:*.ra=01;36:*.wav=01;36:*.oga=01;36:*.opus=01;36:*.spx=01;36:*.xspf=01;36:
+TACC_CC=nvc
+__LMOD_REF_COUNT_PKG_CONFIG_PATH=/opt/apps/nvidia24/openmpi/5.0.5/lib/pkgconfig:1
+VIRTUAL_ENV=/work/11669/aleccheng/vista/CRMArena/.venv
+TACC_VEC_FLAGS=-Mvect=simd -fast -Mipa=fast,inline
+SCRATCH=/scratch/11669/aleccheng
+__LMOD_REF_COUNT_CPATH=/opt/apps/ucx/1.20.0/include:1;/opt/apps/ucc/1.7.0/include:1;/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/include:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/extras/qd/include/qd:1
+TACC_CMAKE_VERSION=4.1.1
+LMOD_SETTARG_FULL_SUPPORT=yes
+NVHPC_ROOT=/home1/apps/nvidia/Linux_aarch64/24.7/compilers
+PROMPT_COMMAND=${X_SET_TITLE_BAR:-:} "$USER@${SHOST}:${PWD/#$HOME/~}"
+CMAKE_PREFIX_PATH=/home1/apps/cmake/4.1.1
+XALT_EXECUTABLE_TRACKING=yes
+TACC_SYSTEM=vista
+TACC_UCC_LIB=/opt/apps/ucc/1.7.0/lib
+TACC_FC=nvfortran
+TACC_OMB_DIR=/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi
+idev_ip=c640-091
+LMOD_VERSION=9.1.2
+SSH_CONNECTION=129.114.16.9 53568 129.114.19.18 22
+PIP_CACHE_DIR=/scratch/11669/aleccheng/.cache/pip
+TACC_MPI_DIR=/opt/apps/nvidia24/openmpi/5.0.5
+__LMOD_Priority_PATH=/opt/apps/xalt/xalt/bin:-100
+TACC_NVIDIA_INC=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/include
+_ModuleTable003_=bnZpZGlhIiwKd1YgPSAiXjAwMDAwMDI0LjAwMDAwMDAwNy4qemZpbmFsIiwKfSwKbnZwbCA9IHsKYWN0aW9uQSA9IHsKW1twcmVwZW5kX3BhdGgoIk1PRFVMRVBBVEgiLCIvb3B0L2FwcHMvbnZpZGlhMjQvbnZwbDI0L21vZHVsZWZpbGVzIildXSwKfSwKZm4gPSAiL29wdC9hcHBzL252aWRpYTI0L21vZHVsZWZpbGVzL252cGwvMjQuNy5sdWEiLApmdWxsTmFtZSA9ICJudnBsLzI0LjciLApsb2FkT3JkZXIgPSAyLApwcm9wVCA9IHt9LApzdGFja0RlcHRoID0gMSwKc3RhdHVzID0gImFjdGl2ZSIsCnVzZXJOYW1lID0gIm52cGwiLAp3ViA9ICIwMDAwMDAwMjQuMDAwMDAwMDA3Lip6ZmluYWwiLAp9LApvcGVubXBpID0gewphY3Rpb25BID0gewpbW3ByZXBlbmRfcGF0aCgiTU9E
+__LMOD_REF_COUNT_COMPILER_PATH=/opt/apps/xalt/xalt/bin:1
+ARCHIVE=/home/11669/aleccheng
+XDG_SESSION_CLASS=user
+LMOD_PKG=/opt/apps/lmod/lmod
+LMOD_CMAKE_BIN=/home1/apps/cmake/4.1.1/bin
+TERM=screen-256color
+STOCKYARD=/work/11669/aleccheng
+WORK=/work/11669/aleccheng/vista
+TACC_UCC_BIN=/opt/apps/ucc/1.7.0/bin
+F77=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin/nvfortran
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+TACC_F77=nvfortran
+USER=aleccheng
+TACC_FAMILY_MPI_VERSION=5.0.5
+__BASHRC_SOURCED__=1
+MPI_ROOT=/opt/apps/nvidia24/openmpi/5.0.5
+TACC_NVPL_INC=/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/include
+TACC_DOMAIN=vista
+LOADEDMODULES=nvidia/24.7:nvpl/24.7:ucc/1.7.0:ucx/1.20.0:openmpi/5.0.5:cmake/4.1.1:xalt/3.1:TACC
+F90=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin/nvfortran
+TACC_UCX_BIN=/opt/apps/ucx/1.20.0/bin
+INCLUDE=/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/include:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/include
+LMOD_ROOT=/opt/apps/lmod
+__LMOD_REF_COUNT_LD_PRELOAD=/opt/apps/xalt/xalt/lib64/libxalt_init.so:1
+SHLVL=1
+INPUTRC=/etc/inputrc
+BASH_ENV=/etc/tacc/tacc_functions
+_ModuleTable006_=L29wdC9hcHBzL21vZHVsZWZpbGVzL3hhbHQvMy4xLmx1YSIsCmZ1bGxOYW1lID0gInhhbHQvMy4xIiwKbG9hZE9yZGVyID0gNywKcHJvcFQgPSB7fSwKc3RhY2tEZXB0aCA9IDEsCnN0YXR1cyA9ICJhY3RpdmUiLAp1c2VyTmFtZSA9ICJ4YWx0IiwKd1YgPSAiMDAwMDAwMDAzLjAwMDAwMDAwMS4qemZpbmFsIiwKfSwKfSwKbXBhdGhBID0gewoiL29wdC9hcHBzL252aWRpYTI0L29wZW5tcGk1L21vZHVsZWZpbGVzIiwgIi9vcHQvYXBwcy9udmlkaWEyNC9udnBsMjQvbW9kdWxlZmlsZXMiCiwgIi9vcHQvYXBwcy9udmlkaWEyNC9tb2R1bGVmaWxlcyIsICIvb3B0L2FwcHMvbW9kdWxlZmlsZXMiLAp9LApzeXN0ZW1CYXNlTVBBVEggPSAiL29wdC9hcHBzL21vZHVsZWZpbGVzIiwK
+OMPI_MCA_coll=^hcoll
+TACC_NVIDIA_DIR=/home1/apps/nvidia/Linux_aarch64/24.7/compilers
+__LMOD_REF_COUNT_MANPATH=/usr/local/man:1;/usr/share/man:1;/usr/X11R6/man:1;/usr/kerberos/man:1;/usr/man:1;/opt/apps/nvidia24/openmpi/5.0.5/share/man:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/man:2;:1
+XDG_SESSION_ID=49403
+TACC_F90=nvfortran
+TACC_UCX_LIB=/opt/apps/ucx/1.20.0/lib
+_ModuleTable001_=X01vZHVsZVRhYmxlXyA9IHsKTVR2ZXJzaW9uID0gMywKY19yZWJ1aWxkVGltZSA9IGZhbHNlLApjX3Nob3J0VGltZSA9IGZhbHNlLApkZXB0aFQgPSB7fSwKZmFtaWx5ID0gewpNUEkgPSAib3Blbm1waSIsCmNvbXBpbGVyID0gIm52aWRpYSIsCn0sCm1UID0gewpUQUNDID0gewpmbiA9ICIvb3B0L2FwcHMvbW9kdWxlZmlsZXMvVEFDQy5sdWEiLApmdWxsTmFtZSA9ICJUQUNDIiwKbG9hZE9yZGVyID0gOCwKcHJvcFQgPSB7fSwKc3RhY2tEZXB0aCA9IDAsCnN0YXR1cyA9ICJhY3RpdmUiLAp1c2VyTmFtZSA9ICJUQUNDIiwKd1YgPSAiTS4qemZpbmFsIiwKfSwKY21ha2UgPSB7CmZuID0gIi9vcHQvYXBwcy9tb2R1bGVmaWxlcy9jbWFrZS80LjEuMS5sdWEiLApmdWxsTmFtZSA9
+WORK2=/work/11669/aleccheng/vista
+LD_LIBRARY_PATH=/opt/apps/nvidia24/openmpi/5.0.5/lib:/opt/apps/ucx/1.20.0/lib/ucx:/opt/apps/ucx/1.20.0/lib:/opt/apps/ucc/1.7.0/lib:/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/lib:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/extras/qd/lib:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/lib
+TACC_NVIDIA_BIN=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin
+LMOD_FAMILY_COMPILER=nvidia
+XDG_RUNTIME_DIR=/run/user/910967
+_ModuleTable004_=VUxFUEFUSCIsIi9vcHQvYXBwcy9udmlkaWEyNC9vcGVubXBpNS9tb2R1bGVmaWxlcyIpXV0sCn0sCmRlcFQgPSB7CmRlcEEgPSB7CnsKc24gPSAidWN4IiwKdmVyc2lvbiA9IHsKa2luZCA9ICJib29sIiwKdmFsdWUgPSB0cnVlLAp9LAp9LAp9LAp9LApmbiA9ICIvb3B0L2FwcHMvbnZpZGlhMjQvbW9kdWxlZmlsZXMvb3Blbm1waS81LjAuNS5sdWEiLApmdWxsTmFtZSA9ICJvcGVubXBpLzUuMC41IiwKbG9hZE9yZGVyID0gNSwKcHJvcFQgPSB7fSwKc3RhY2tEZXB0aCA9IDEsCnN0YXR1cyA9ICJhY3RpdmUiLAp1c2VyTmFtZSA9ICJvcGVubXBpIiwKd1YgPSAiXjAwMDAwMDA1LjAwMDAwMDAwMC4wMDAwMDAwMDUuKnpmaW5hbCIsCn0sCnVjYyA9IHsKZm4gPSAiL29wdC9hcHBz
+S_COLORS=auto
+LMOD_FAMILY_MPI_VERSION=5.0.5
+PS1=(.venv) c640-091[gh](\!)\$ 
+SSH_CLIENT=129.114.16.9 53568 22
+TACC_FAMILY_MPI=openmpi
+OMP_NUM_THREADS=1
+LMOD_FAMILY_MPI=openmpi
+DEBUGINFOD_IMA_CERT_PATH=/etc/keys/ima:
+TACC_XALT_DIR=/opt/apps/xalt/xalt/
+FC=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin/nvfortran
+which_declare=declare -f
+LMOD_FAMILY_COMPILER_VERSION=24.7
+TACC_NVPL_LIB=/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/lib
+STOCKYARD2=/work/11669/aleccheng
+XDG_DATA_DIRS=/home1/11669/aleccheng/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share
+TACC_NVIDIA_LIB=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/lib
+__Init_Default_Modules=1
+PATH=/work/11669/aleccheng/vista/CRMArena/.venv/bin:/home1/11669/aleccheng/.local/bin:/opt/apps/xalt/xalt/bin:/home1/apps/cmake/4.1.1/bin:/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/one-sided:/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/collective:/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/pt2pt:/opt/apps/nvidia24/openmpi/5.0.5/libexec/osu-micro-benchmarks/mpi/startup:/opt/apps/nvidia24/openmpi/5.0.5/bin:/opt/apps/ucx/1.20.0/bin:/opt/apps/ucc/1.7.0/bin:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/extras/qd/bin:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:.
+NVHPC=/home1/apps/nvidia/Linux_aarch64/24.7/compilers
+TACC_UCC_DIR=/opt/apps/ucc/1.7.0
+MODULEPATH=/opt/apps/nvidia24/openmpi5/modulefiles:/opt/apps/nvidia24/nvpl24/modulefiles:/opt/apps/nvidia24/modulefiles:/opt/apps/modulefiles
+CC=/home1/apps/nvidia/Linux_aarch64/24.7/compilers/bin/nvc
+_LMFILES_=/opt/apps/modulefiles/nvidia/24.7.lua:/opt/apps/nvidia24/modulefiles/nvpl/24.7.lua:/opt/apps/modulefiles/ucc/1.7.0.lua:/opt/apps/modulefiles/ucx/1.20.0.lua:/opt/apps/nvidia24/modulefiles/openmpi/5.0.5.lua:/opt/apps/modulefiles/cmake/4.1.1.lua:/opt/apps/modulefiles/xalt/3.1.lua:/opt/apps/modulefiles/TACC.lua
+ARCHIVER=ranch.tacc.utexas.edu
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/910967/bus
+LMOD_CMD=/opt/apps/lmod/lmod/libexec/lmod
+MAIL=/var/spool/mail/aleccheng
+SSH_TTY=/dev/pts/0
+TOKIO_WORKER_THREADS=4
+__LMOD_REF_COUNT_LD_LIBRARY_PATH=/opt/apps/nvidia24/openmpi/5.0.5/lib:1;/opt/apps/ucx/1.20.0/lib/ucx:1;/opt/apps/ucx/1.20.0/lib:1;/opt/apps/ucc/1.7.0/lib:1;/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/lib:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/extras/qd/lib:1;/home1/apps/nvidia/Linux_aarch64/24.7/compilers/lib:1
+OMPI_MCA_io=^ompio
+TACC_CMAKE_BIN=/home1/apps/cmake/4.1.1/bin
+LMOD_SYSTEM_DEFAULT_MODULES=TACC
+CPATH=/opt/apps/ucx/1.20.0/include:/opt/apps/ucc/1.7.0/include:/home1/apps/nvidia/Linux_aarch64/24.7/math_libs/nvpl/include:/home1/apps/nvidia/Linux_aarch64/24.7/compilers/extras/qd/include/qd
+LMOD_SETTARG_TITLE_BAR=yes
+LMOD_CMAKE_DIR=/home1/apps/cmake/4.1.1
+OLDPWD=/home1/11669/aleccheng
+BASH_FUNC_ml%%=() {  eval "$($LMOD_DIR/ml_cmd "$@")"
+}
+BASH_FUNC_which%%=() {  ( alias;
+ eval ${which_declare} ) | /usr/bin/which --tty-only --read-alias --read-functions --show-tilde --show-dot $@
+}
+BASH_FUNC_module%%=() {  if [ -z "${LMOD_SH_DBG_ON+x}" ]; then
+ case "$-" in 
+ *v*x*)
+ __lmod_sh_dbg='vx'
+ ;;
+ *v*)
+ __lmod_sh_dbg='v'
+ ;;
+ *x*)
+ __lmod_sh_dbg='x'
+ ;;
+ esac;
+ fi;
+ if [ -n "${__lmod_sh_dbg:-}" ]; then
+ set +$__lmod_sh_dbg;
+ echo "Shell debugging temporarily silenced: export LMOD_SH_DBG_ON=1 for Lmod's output" 1>&2;
+ fi;
+ eval "$($LMOD_CMD shell "$@")" && eval "$(${LMOD_SETTARG_CMD:-:} -s sh)";
+ __lmod_my_status=$?;
+ if [ -n "${__lmod_sh_dbg:-}" ]; then
+ echo "Shell debugging restarted" 1>&2;
+ set -$__lmod_sh_dbg;
+ fi;
+ unset __lmod_sh_dbg;
+ return $__lmod_my_status
+}
+_=/usr/bin/nohup
+AGENT_MODEL=openai/Qwen3.5-35B-A3B
+AGENT_BASE_URL=http://127.0.0.1:8001/v1
+AGENT_API_KEY=dummy
+USE_LLAMA_JUDGE=true
+LLAMA_HOST=c640-012
+LLAMA_PORT=8002
+LLAMA_MODEL=meta-llama/Llama-3.1-8B-Instruct
+TASKS_CSV=quote_approval,lead_qualification
+ORG_TYPES_CSV=b2b
+INTERACTIVE=true
+MAX_TASKS_PER_CATEGORY=30
+MAX_TURNS=20
+MAX_USER_TURNS=10

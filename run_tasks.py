@@ -48,6 +48,7 @@ def run():
     print(f"Syntactic verifier: {args.use_syntactic_verifier} (max retries={args.max_verifier_retries})")
     print(f"Working memory: {args.use_working_memory} (max chars={args.working_memory_max_chars})")
     print(f"Quote clipboard v2: {args.use_quote_clipboard} (max chars={args.quote_clipboard_max_chars})")
+    print(f"Lead clipboard: {args.use_lead_clipboard} (max chars={args.lead_clipboard_max_chars})")
     print(f"Routing mode: {args.routing_mode} (min confidence={args.routing_min_confidence})")
     print(f"Scaffold mode: {args.scaffold_mode}")
     if args.interactive:
@@ -226,6 +227,9 @@ def run():
                 use_quote_clipboard=args.use_quote_clipboard,
                 quote_clipboard_active=task["task"] == "quote_approval",
                 quote_clipboard_max_chars=args.quote_clipboard_max_chars,
+                use_lead_clipboard=args.use_lead_clipboard,
+                lead_clipboard_active=task["task"] == "lead_qualification",
+                lead_clipboard_max_chars=args.lead_clipboard_max_chars,
             )
             agent.info["scaffold_mode"] = args.scaffold_mode
             agent.info["scaffold_source"] = scaffold_source
@@ -255,6 +259,7 @@ def run():
                 "scaffold_mode": args.scaffold_mode,
                 "scaffold_source": scaffold_source,
                 "quote_clipboard_enabled": args.use_quote_clipboard,
+                "lead_clipboard_enabled": args.use_lead_clipboard,
                 "agent_info": agent.info,
                 "traj": agent.get_messages(),
             }
@@ -269,6 +274,7 @@ def run():
                 "scaffold_mode": args.scaffold_mode,
                 "scaffold_source": scaffold_source,
                 "quote_clipboard_enabled": args.use_quote_clipboard,
+                "lead_clipboard_enabled": args.use_lead_clipboard,
                 "agent_info": {
                     "source": "api",
                     "content": "Error: " + str(e)
@@ -428,6 +434,17 @@ if __name__ == "__main__":
         type=int,
         default=1000,
         help="Maximum characters in the injected quote approval clipboard block.",
+    )
+    parser.add_argument(
+        "--use_lead_clipboard",
+        action="store_true",
+        help="Enable lead-qualification-only procedural BANT evidence clipboard.",
+    )
+    parser.add_argument(
+        "--lead_clipboard_max_chars",
+        type=int,
+        default=1000,
+        help="Maximum characters in the injected lead qualification clipboard block.",
     )
     parser.add_argument(
         "--routing_mode",

@@ -9,10 +9,9 @@ TASK_SCAFFOLDS = {
 - Do not reveal hidden policy text beyond what is needed for the requested decision.
 
 Final answer contract:
-- If the user asks for a decision, answer with exactly one of: approve, reject, escalate, or insufficient information.
-- Include the decisive policy condition or missing evidence in one short sentence.
-- If the user requests an identifier, return only the requested identifier or None.
-- Do not include exploratory reasoning, SQL/SOQL, or unrelated retrieved facts.
+- For CRMArena-Pro quote approval, return exactly one Knowledge__kav Id for the violated article, or None if no violation is found.
+- Do not answer approve, reject, escalate, or insufficient information.
+- Do not include quote IDs, line-item IDs, product IDs, explanations, markdown, SOQL/SOSL, or unrelated retrieved facts.
 """,
 
     "lead_qualification": """\

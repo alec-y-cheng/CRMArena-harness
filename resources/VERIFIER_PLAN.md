@@ -147,3 +147,85 @@ Retrieve line items for this quote.
 ## Changes
 quote clipboard: evidence based, not retrieval deterministic, less context
 try new scaffolding on other tasks
+
+try procedural clipboard for all other ones
+
+world model scaffolding?
+
+
+
+• I think the quote clipboard failed for a pretty specific reason: it optimized retrieval
+  discipline, but the benchmark reward depends on the final policy answer.
+
+  Evidence from the run:
+
+  - quote_clipboardv2_only: 0/30
+  - Clipboard active on 29/30
+  - Final clipboard stage was usually evaluate_policy: 28 tasks reached it
+  - Gate failures happened, but mostly early:
+      - QUOTE_CLIPBOARD_MISSING_QUOTE: 26
+      - QUOTE_CLIPBOARD_MISSING_POLICY_CANDIDATES: 7
+      - QUOTE_CLIPBOARD_MISSING_LINE_ITEMS: 3
+
+  - It averaged 15.7 model calls and 11.1 env steps, higher than quote scaffolding.
+
+  So it usually did not fail because it got permanently stuck. It failed because it made
+  the agent spend more turns satisfying retrieval prerequisites, then still did not
+  produce the right answer.
+
+  Likely failure modes:
+    1. The gate was too retrieval-heavy
+     It forced quote, line items, policy candidates, and inspected policy before
+     responding. But many quote tasks may not require all four in that exact order,
+     especially interactive tasks where the user may provide policy details.
+
+  2. It did not track the actual decision variables
+     It tracked “quote retrieved” and “policy inspected,” but not the facts that matter:
+      - target quote name/id
+      - total price
+      - discount thresholds
+      - required/minimum quantities
+      - product compatibility constraints
+      - which specific policy condition is violated
+
+  3. It increased context and turn pressure
+     More model calls means more chances for malformed responses, context-window errors,
+     or drifting away from the requested answer format.
+
+  4. It didn’t enforce the final answer contract
+     The clipboard only blocks early response. Once it reaches evaluate_policy, it allows
+     the response even if the answer is verbose, wrong format, or misses None/article ID
+     style requirements.
+
+  5. It may have overfit the wrong abstraction
+     Quote approval is less like “did I retrieve all required objects?” and more like
+     “did I compare the right numeric/configuration constraints?” A clipboard should be a
+     compact evidence ledger, not a retrieval checklist.
+
+  What I’d change:
+
+  - Make it nonblocking except for missing target quote and maybe line items.
+  - Remove the hard requirement to inspect policy if the user provides policy rules
+    interactively.
+
+  - Track compact decision facts:
+      - quote id/name
+      - total amount
+      - line item product names, quantities, discounts
+      - user/policy constraints extracted from observations
+      - candidate violation conditions
+
+  - Pair it with the quote scaffold/final-answer contract.
+  - Add a final response gate for format only, not semantic correctness.
+
+  In short: the clipboard helped the model gather evidence, but not decide or answer
+
+
+### To do next
+- Compile all ablation results into one table file
+- Read about top harnesses and verifiers
+- Read the trajectories more in depth and write out microplans to complete each task
+- Response readiness based on evidence (depending on failure modes)
+- Final answer verifier and formatter (depending on failure modes)
+- Pre-execution guards (don't repeat queries)
+- QAW Candidate generation
