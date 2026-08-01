@@ -142,7 +142,7 @@ def fc_prompt_builder(tools):
 
     
 ### Metrics ###
-bleu_scorer = BLEU()
+bleu_scorer = BLEU(effective_order=True)
 rouge_scorer = Rouge()
 
 def normalize_answer(s):

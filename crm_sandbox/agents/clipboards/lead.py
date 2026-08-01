@@ -2,7 +2,7 @@ import ast
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Set
 
 from verifiers.schema_utils import normalize_query
 from verifiers.types import VerificationResult
@@ -115,8 +115,8 @@ MISSING_EVIDENCE_WARNINGS = {
 @dataclass
 class LeadQueryFacts:
     query_type: str = "unknown"
-    objects: set[str] = field(default_factory=set)
-    selected_fields: set[str] = field(default_factory=set)
+    objects: Set[str] = field(default_factory=set)
+    selected_fields: Set[str] = field(default_factory=set)
     targets_lead: bool = False
     targets_guide: bool = False
     targets_transcript: bool = False
@@ -125,7 +125,7 @@ class LeadQueryFacts:
 @dataclass
 class LeadObservationFacts:
     failed: bool = False
-    records: list[dict] = field(default_factory=list)
+    records: List[dict] = field(default_factory=list)
     record_count: int = 0
 
     @property
@@ -139,14 +139,14 @@ class LeadClipboard:
     next_goal: str = "Gather lead facts, qualification guide evidence, and BANT-relevant customer evidence."
     lead_id: Optional[str] = None
     lead_facts: dict = field(default_factory=dict)
-    qualification_guides: list[dict] = field(default_factory=list)
-    transcript_evidence: list[dict] = field(default_factory=list)
-    bant_evidence: dict[str, list[str]] = field(
+    qualification_guides: List[dict] = field(default_factory=list)
+    transcript_evidence: List[dict] = field(default_factory=list)
+    bant_evidence: Dict[str, List[str]] = field(
         default_factory=lambda: {factor: [] for factor in BANT_FACTORS}
     )
-    unresolved: list[str] = field(default_factory=list)
-    failed_queries: list[str] = field(default_factory=list)
-    no_result_queries: list[str] = field(default_factory=list)
+    unresolved: List[str] = field(default_factory=list)
+    failed_queries: List[str] = field(default_factory=list)
+    no_result_queries: List[str] = field(default_factory=list)
 
 
 class LeadQualificationClipboard:
@@ -309,7 +309,7 @@ class LeadQualificationClipboard:
         records = self._records_from_observation(observation)
         return LeadObservationFacts(failed=False, records=records, record_count=len(records))
 
-    def _update_lead_facts(self, records: list[dict]) -> None:
+    def _update_lead_facts(self, records: List[dict]) -> None:
         if not records:
             return
         record = records[0]
@@ -321,7 +321,7 @@ class LeadQualificationClipboard:
                 self.state.lead_facts[key] = self._compact_value(value)
         self._assign_bant_evidence(record)
 
-    def _update_guides(self, records: list[dict]) -> None:
+    def _update_guides(self, records: List[dict]) -> None:
         for record in records:
             compact = {}
             for key in GUIDE_FIELDS:
@@ -334,7 +334,7 @@ class LeadQualificationClipboard:
                 self._assign_bant_evidence(record)
         self.state.qualification_guides = self.state.qualification_guides[-self.max_items :]
 
-    def _update_transcripts(self, records: list[dict]) -> None:
+    def _update_transcripts(self, records: List[dict]) -> None:
         for record in records:
             compact = {}
             for key in TRANSCRIPT_FIELDS:
@@ -347,7 +347,7 @@ class LeadQualificationClipboard:
                 self._assign_bant_evidence(record)
         self.state.transcript_evidence = self.state.transcript_evidence[-self.max_items :]
 
-    def _update_opportunistic_facts(self, records: list[dict]) -> None:
+    def _update_opportunistic_facts(self, records: List[dict]) -> None:
         for record in records:
             keys = set(record.keys())
             if "LeadId" in keys or "WhoId" in keys or keys & TRANSCRIPT_SIGNAL_FIELDS:
@@ -398,7 +398,7 @@ class LeadQualificationClipboard:
         self.state.stage = "evidence_ready" if self.state.lead_facts or self.state.qualification_guides or any(self.state.bant_evidence.values()) else "collect_evidence"
         self.state.unresolved = self.state.unresolved[-self.max_items :]
 
-    def _records_from_observation(self, observation: Any) -> list[dict]:
+    def _records_from_observation(self, observation: Any) -> List[dict]:
         parsed = observation
         if isinstance(observation, str):
             text = observation.strip()
@@ -422,7 +422,7 @@ class LeadQualificationClipboard:
             return [parsed]
         return []
 
-    def _split_fields(self, fields_text: str) -> set[str]:
+    def _split_fields(self, fields_text: str) -> Set[str]:
         fields = set()
         for raw in fields_text.split(","):
             field_name = raw.strip().split()[0].strip()
@@ -442,7 +442,7 @@ class LeadQualificationClipboard:
             self.state.no_result_queries.append(normalized)
         self.state.no_result_queries = self.state.no_result_queries[-self.max_items :]
 
-    def _upsert_list_item(self, items: list[dict], item: dict) -> None:
+    def _upsert_list_item(self, items: List[dict], item: dict) -> None:
         key = self._stable_item_key(item)
         for index, existing in enumerate(items):
             if self._stable_item_key(existing) == key:
@@ -465,7 +465,7 @@ class LeadQualificationClipboard:
         parts = [f"{key}={self._compact_text(str(val), 80)}" for key, val in list(value.items())[: self.max_items]]
         return "; ".join(parts)
 
-    def _render_list(self, items: list[dict], fallback: str) -> str:
+    def _render_list(self, items: List[dict], fallback: str) -> str:
         if not items:
             return fallback
         rendered = []
@@ -473,11 +473,11 @@ class LeadQualificationClipboard:
             rendered.append(self._render_mapping(item, "empty"))
         return " | ".join(rendered)
 
-    def _join_items(self, items: list[str], fallback: str) -> str:
+    def _join_items(self, items: List[str], fallback: str) -> str:
         compact_items = [self._compact_text(item, 120) for item in items if item]
         return "; ".join(compact_items) if compact_items else fallback
 
-    def _append_unique(self, items: list[str], item: str) -> None:
+    def _append_unique(self, items: List[str], item: str) -> None:
         item = self._compact_text(item, 180)
         if item and item not in items:
             items.append(item)

@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import json
 import os
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, List, Mapping
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +14,7 @@ def default_hf_cache_env() -> None:
         os.environ.setdefault("HF_DATASETS_CACHE", str(DEFAULT_HF_HOME / "datasets"))
 
 
-def load_crmarena_schema(schema_name: str) -> list[Mapping]:
+def load_crmarena_schema(schema_name: str) -> List[Mapping]:
     default_hf_cache_env()
     # Vista benchmark runs should be reproducible from the cached HF datasets.
     # Set CRMARENA_SCHEMA_OFFLINE=0 if a fresh download is intentionally needed.
@@ -41,8 +39,8 @@ def load_crmarena_schema(schema_name: str) -> list[Mapping]:
     return clean_schema(rows)
 
 
-def clean_schema(schema_rows: Iterable[Mapping]) -> list[dict]:
-    cleaned: list[dict] = []
+def clean_schema(schema_rows: Iterable[Mapping]) -> List[dict]:
+    cleaned: List[dict] = []
     for item in schema_rows:
         object_name = item.get("object")
         fields = item.get("fields")

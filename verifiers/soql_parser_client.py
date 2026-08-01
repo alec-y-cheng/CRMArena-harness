@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import atexit
 import json
 import os
@@ -8,7 +6,7 @@ import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -22,8 +20,8 @@ class SOQLParserError:
 @dataclass(frozen=True)
 class SOQLParseResult:
     success: bool
-    errors: tuple[SOQLParserError, ...]
-    tokens: tuple[Mapping[str, Any], ...] = ()
+    errors: Tuple[SOQLParserError, ...]
+    tokens: Tuple[Mapping[str, Any], ...] = ()
     parse_tree: Optional[Mapping[str, Any]] = None
     unavailable: bool = False
 
@@ -32,7 +30,7 @@ class SOQLParserService:
     def __init__(self, node_path: Optional[str] = None, script_path: Optional[Path] = None) -> None:
         self.node_path = node_path or self._find_node()
         self.script_path = script_path or Path(__file__).resolve().parent / "soql_parser" / "parse_soql.js"
-        self._process: Optional[subprocess.Popen[str]] = None
+        self._process: Optional[subprocess.Popen] = None
         self._lock = threading.Lock()
         self._next_id = 1
 
@@ -86,7 +84,7 @@ class SOQLParserService:
             except Exception:
                 pass
 
-    def _ensure_process(self) -> subprocess.Popen[str]:
+    def _ensure_process(self) -> subprocess.Popen:
         if self._process is not None and self._process.poll() is None:
             return self._process
         env = dict(os.environ)

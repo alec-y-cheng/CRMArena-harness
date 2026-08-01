@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Optional
+from typing import Iterable, List, Mapping, Optional, Tuple
 
 
 CONFIDENTIALITY_TASKS = {
@@ -23,7 +23,7 @@ SUPPORTED_TASK_FAMILIES = {
 class RoutingResult:
     task_family: str
     confidence: float
-    evidence: list[str] = field(default_factory=list)
+    evidence: List[str] = field(default_factory=list)
     mode: str = "deterministic"
     scaffold_used: str = "general"
     oracle_task_label: Optional[str] = None
@@ -44,7 +44,7 @@ class RoutingResult:
 @dataclass(frozen=True)
 class _Rule:
     family: str
-    patterns: tuple[str, ...]
+    patterns: Tuple[str, ...]
     confidence: float
 
 
@@ -218,7 +218,7 @@ def _deterministic_route(
 
     best_family = "confidentiality"
     best_confidence = 0.0
-    best_evidence: list[str] = []
+    best_evidence: List[str] = []
 
     for rule in RULES:
         matches = _matched_patterns(visible_text, rule.patterns)
@@ -280,7 +280,7 @@ def _visible_text(query: str, metadata: Optional[Mapping]) -> str:
     return "\n".join(parts).lower()
 
 
-def _matched_patterns(text: str, patterns: Iterable[str]) -> list[str]:
+def _matched_patterns(text: str, patterns: Iterable[str]) -> List[str]:
     evidence = []
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)

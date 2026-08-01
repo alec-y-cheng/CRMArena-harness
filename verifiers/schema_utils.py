@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, Optional, Set
+from typing import Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 
 BENCHMARK_REFERENCE_TARGETS: Mapping[str, Mapping[str, Set[str]]] = {
@@ -312,8 +312,8 @@ def normalize_query(query: str) -> str:
     return normalized
 
 
-def _literal_preserving_parts(query: str) -> List[tuple[bool, str]]:
-    parts: List[tuple[bool, str]] = []
+def _literal_preserving_parts(query: str) -> List[Tuple[bool, str]]:
+    parts: List[Tuple[bool, str]] = []
     buffer: List[str] = []
     literal: List[str] = []
     in_quote: Optional[str] = None

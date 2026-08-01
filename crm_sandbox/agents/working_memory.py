@@ -1,6 +1,6 @@
 import ast
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, List, Mapping, Optional
 
 
 DEFAULT_NEXT_GOAL = {
@@ -16,9 +16,9 @@ DEFAULT_NEXT_GOAL = {
 class WorkingMemoryState:
     task_family: str = "unknown"
     goal: str = ""
-    known: list[str] = field(default_factory=list)
-    unknown: list[str] = field(default_factory=list)
-    failed_queries: list[str] = field(default_factory=list)
+    known: List[str] = field(default_factory=list)
+    unknown: List[str] = field(default_factory=list)
+    failed_queries: List[str] = field(default_factory=list)
     next_goal: str = ""
 
     def as_dict(self) -> dict:
@@ -105,7 +105,7 @@ class WorkingMemory:
     def as_dict(self) -> dict:
         return self.state.as_dict()
 
-    def _initial_unknowns(self, query: str, task_family: str) -> list[str]:
+    def _initial_unknowns(self, query: str, task_family: str) -> List[str]:
         lowered = query.lower()
         if task_family == "lead_qualification":
             if "bant" in lowered:
@@ -161,7 +161,7 @@ class WorkingMemory:
             return text
         return text[: limit - 3].rstrip() + "..."
 
-    def _append_unique(self, items: list[str], item: str) -> None:
+    def _append_unique(self, items: List[str], item: str) -> None:
         item = self._compact(item, 220)
         if item and item not in items:
             items.append(item)

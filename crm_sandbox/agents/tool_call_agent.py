@@ -1,8 +1,7 @@
 import json, os
-from litellm import completion, completion_cost
+from litellm import completion
 from typing import Dict, List, Any
 import re, traceback, ast, time
-from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from crm_sandbox.agents.prompts import SCHEMA_STRING, SYSTEM_METADATA, NATIVE_FC_PROMPT, CUSTOM_FC_PROMPT, FC_RULE_STRING, FC_FLEX_PROMPT
 from crm_sandbox.agents.utils import parse_wrapped_response, BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP, fc_prompt_builder

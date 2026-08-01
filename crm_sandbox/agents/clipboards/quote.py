@@ -2,7 +2,7 @@ import ast
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Set
 
 from verifiers.schema_utils import normalize_query
 from verifiers.types import VerificationResult
@@ -128,8 +128,8 @@ MISSING_EVIDENCE_WARNINGS = {
 @dataclass
 class QueryFacts:
     query_type: str = "unknown"
-    objects: set[str] = field(default_factory=set)
-    selected_fields: set[str] = field(default_factory=set)
+    objects: Set[str] = field(default_factory=set)
+    selected_fields: Set[str] = field(default_factory=set)
     targets_quote: bool = False
     targets_line_items: bool = False
     targets_policy: bool = False
@@ -139,7 +139,7 @@ class QueryFacts:
 @dataclass
 class ObservationFacts:
     failed: bool = False
-    records: list[dict] = field(default_factory=list)
+    records: List[dict] = field(default_factory=list)
     record_count: int = 0
 
     @property
@@ -151,15 +151,15 @@ class ObservationFacts:
 class QuoteClipboard:
     stage: str = "collect_evidence"
     next_goal: str = "Gather quote, line-item, and policy facts needed for the approval answer."
-    requested_policy_dimensions: list[str] = field(default_factory=list)
+    requested_policy_dimensions: List[str] = field(default_factory=list)
     quote_facts: dict = field(default_factory=dict)
-    line_items: list[dict] = field(default_factory=list)
-    policy_evidence: list[dict] = field(default_factory=list)
-    policy_evidence_by_type: dict[str, list[dict]] = field(
+    line_items: List[dict] = field(default_factory=list)
+    policy_evidence: List[dict] = field(default_factory=list)
+    policy_evidence_by_type: Dict[str, List[dict]] = field(
         default_factory=lambda: {bucket: [] for bucket in POLICY_BUCKETS}
     )
-    unresolved: list[str] = field(default_factory=list)
-    failed_queries: list[str] = field(default_factory=list)
+    unresolved: List[str] = field(default_factory=list)
+    failed_queries: List[str] = field(default_factory=list)
 
 
 class QuoteApprovalClipboard:
@@ -307,7 +307,7 @@ class QuoteApprovalClipboard:
         records = self._records_from_observation(observation)
         return ObservationFacts(failed=False, records=records, record_count=len(records))
 
-    def _update_quote_facts(self, records: list[dict]) -> None:
+    def _update_quote_facts(self, records: List[dict]) -> None:
         if not records:
             return
         record = records[0]
@@ -315,7 +315,7 @@ class QuoteApprovalClipboard:
             if key in QUOTE_FACT_FIELDS or MONEY_OR_QUANTITY_FIELD_RE.search(key):
                 self.state.quote_facts[key] = self._compact_value(value)
 
-    def _update_line_items(self, records: list[dict]) -> None:
+    def _update_line_items(self, records: List[dict]) -> None:
         for record in records:
             compact = {}
             for key, value in record.items():
@@ -325,7 +325,7 @@ class QuoteApprovalClipboard:
                 self._upsert_list_item(self.state.line_items, compact)
         self.state.line_items = self.state.line_items[-self.max_items :]
 
-    def _update_policy_evidence(self, records: list[dict]) -> None:
+    def _update_policy_evidence(self, records: List[dict]) -> None:
         for record in records:
             evidence = {}
             for key in POLICY_RENDER_FIELDS:
@@ -342,7 +342,7 @@ class QuoteApprovalClipboard:
             self.state.policy_evidence_by_type[bucket] = self.state.policy_evidence_by_type[bucket][-self.max_items :]
         self._refresh_relevant_policy_evidence()
 
-    def _update_opportunistic_facts(self, records: list[dict]) -> None:
+    def _update_opportunistic_facts(self, records: List[dict]) -> None:
         for record in records:
             keys = set(record.keys())
             if "QuoteId" in keys or keys & LINE_ITEM_FACT_FIELDS:
@@ -376,7 +376,7 @@ class QuoteApprovalClipboard:
         self.state.stage = "evidence_ready" if self.state.quote_facts or self.state.line_items or self._has_any_policy_evidence() else "collect_evidence"
         self.state.unresolved = self.state.unresolved[-self.max_items :]
 
-    def _records_from_observation(self, observation: Any) -> list[dict]:
+    def _records_from_observation(self, observation: Any) -> List[dict]:
         parsed = observation
         if isinstance(observation, str):
             text = observation.strip()
@@ -400,7 +400,7 @@ class QuoteApprovalClipboard:
             return [parsed]
         return []
 
-    def _split_fields(self, fields_text: str) -> set[str]:
+    def _split_fields(self, fields_text: str) -> Set[str]:
         fields = set()
         for raw in fields_text.split(","):
             field_name = raw.strip().split()[0].strip()
@@ -414,7 +414,7 @@ class QuoteApprovalClipboard:
             self.state.failed_queries.append(normalized)
         self.state.failed_queries = self.state.failed_queries[-self.max_items :]
 
-    def _upsert_list_item(self, items: list[dict], item: dict) -> None:
+    def _upsert_list_item(self, items: List[dict], item: dict) -> None:
         key = self._stable_item_key(item)
         for index, existing in enumerate(items):
             if self._stable_item_key(existing) == key:
@@ -487,7 +487,7 @@ class QuoteApprovalClipboard:
         best_bucket = max(scores, key=scores.get)
         return best_bucket if scores[best_bucket] > 0 else "other"
 
-    def _infer_requested_policy_dimensions(self, query: str) -> list[str]:
+    def _infer_requested_policy_dimensions(self, query: str) -> List[str]:
         lowered = (query or "").lower()
         dimensions = [
             bucket
@@ -508,11 +508,11 @@ class QuoteApprovalClipboard:
             return "Retrieve timeline, installation, or deployment policy evidence if that is the requested compliance check."
         return "Retrieve relevant quote approval policy/article evidence, or use explicit user-supplied policy rules."
 
-    def _join_items(self, items: list[str], fallback: str) -> str:
+    def _join_items(self, items: List[str], fallback: str) -> str:
         compact_items = [self._compact_text(item, 120) for item in items if item]
         return "; ".join(compact_items) if compact_items else fallback
 
-    def _append_unique(self, items: list[str], item: str) -> None:
+    def _append_unique(self, items: List[str], item: str) -> None:
         item = self._compact_text(item, 180)
         if item and item not in items:
             items.append(item)

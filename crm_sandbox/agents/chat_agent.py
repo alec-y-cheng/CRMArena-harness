@@ -334,6 +334,13 @@ class ChatAgent:
 
             obs, reward, done, info = env.step(action)
             self.info["env_steps"] += 1
+            for timing_key in (
+                "time_to_resolution_seconds",
+                "interaction_start_time",
+                "interaction_end_time",
+            ):
+                if timing_key in info:
+                    self.info[timing_key] = info[timing_key]
             if self.working_memory is not None:
                 self.working_memory.record_env_step(action, obs, info)
                 self.info["working_memory_snapshots"].append(

@@ -6,7 +6,28 @@ from concurrent.futures import ThreadPoolExecutor
 from crm_sandbox.agents.utils import get_all_metrics
 import litellm
 import json
+import os
 import re
+import inspect
+import time
+
+
+def _litellm_completion_argspec():
+    return inspect.getfullargspec(litellm.completion)
+
+
+def _litellm_completion_accepts_kwargs() -> bool:
+    return _litellm_completion_argspec().varkw is not None
+
+
+def _litellm_completion_supports_provider() -> bool:
+    argspec = _litellm_completion_argspec()
+    return argspec.varkw is not None or "custom_llm_provider" in argspec.args
+
+
+def _litellm_completion_supports_api_kwargs() -> bool:
+    argspec = _litellm_completion_argspec()
+    return argspec.varkw is not None or "api_base" in argspec.args or "api_key" in argspec.args
 
 class ChatEnv(object):
     def __init__(
@@ -55,6 +76,7 @@ class ChatEnv(object):
         if action["name"] == "execute":
             result, status = self.sf_connector.run_query(action["content"])
             observation = result
+            print("Salesforce observation:", observation)
             if status == 0:
                 info["end_reason"] = {
                     "source": "agent",
@@ -86,6 +108,8 @@ class ChatEnv(object):
         reward = reward_info["reward"]
         parsed_answer = reward_info["parsed_answer"]
         print(f"Ground Truth: {self.task['answer']} || Prediction: {parsed_answer} || Reward: {reward}")
+        if isinstance(reward, dict) and "f1" in reward:
+            print(f"F1 Score: {reward['f1']}")
         return {
             "reward": reward,
             "parsed_answer": parsed_answer
@@ -186,6 +210,7 @@ class ToolEnv(object):
                 reward = 1
         elif self.task["reward_metric"] == "fuzzy_match":
             reward = get_all_metrics(proposed_answer, gt_answer)
+            print(f"F1 Score: {reward['f1']}")
         return reward
     
 class InteractiveChatEnv(ChatEnv):
@@ -224,6 +249,9 @@ class InteractiveChatEnv(ChatEnv):
         )
         self.max_user_turns = max_user_turns
         self.current_user_turn = 0
+        self.interaction_start_time: Optional[float] = None
+        self.interaction_end_time: Optional[float] = None
+        self._interaction_start_perf_counter: Optional[float] = None
         self.evaluator = Evaluator(
             model=evaluator_model or user_model,
             provider=evaluator_provider or user_provider,
@@ -238,6 +266,9 @@ class InteractiveChatEnv(ChatEnv):
         observation = None
         info = {}
         parsed_answer = None
+        if self.interaction_start_time is None:
+            self.interaction_start_time = time.time()
+            self._interaction_start_perf_counter = time.perf_counter()
         if self.current_user_turn >= self.max_user_turns:
             done = True
             info["end_reason"] = {
@@ -266,18 +297,46 @@ class InteractiveChatEnv(ChatEnv):
         #     }
         #     reward = self.calculate_reward()
         elif action["name"] == "respond":
-            observation = self.user.step(action["content"])
-            if "###STOP###" in observation:
+            print("Agent response to user:", action["content"])
+            if (
+                self._lead_qualification_auto_stop_enabled()
+                and self._is_lead_qualification_final_answer(action["content"])
+            ) or (
+                self._quote_approval_auto_stop_enabled()
+                and self._is_quote_approval_final_answer(action["content"])
+            ):
+                observation = "###STOP###"
+                print("Simulated user response:", observation)
                 done = True
                 info["end_reason"] = {
                     "source": "agent",
-                    "message": "Submit action", # submit action is not implied through ###STOP###
-                    "content":  action["content"]
+                    "message": "Submit action",
+                    "content": action["content"],
                 }
                 reward_info = self.calculate_reward()
                 reward = reward_info["reward"]
                 parsed_answer = reward_info["parsed_answer"]
                 info["end_reason"]["parsed_answer"] = parsed_answer
+                info["end_reason"]["auto_stop"] = (
+                    "quote_approval_final_answer"
+                    if self._is_quote_approval_final_answer(action["content"])
+                    else "lead_qualification_final_answer"
+                )
+            else:
+                observation = self.user.step(action["content"])
+                print("Simulated user response:", observation)
+            if "###STOP###" in observation:
+                if not done:
+                    done = True
+                    info["end_reason"] = {
+                        "source": "agent",
+                        "message": "Submit action", # submit action is not implied through ###STOP###
+                        "content":  action["content"]
+                    }
+                    reward_info = self.calculate_reward()
+                    reward = reward_info["reward"]
+                    parsed_answer = reward_info["parsed_answer"]
+                    info["end_reason"]["parsed_answer"] = parsed_answer
             else:
                 info["end_reason"] = {
                     "source": "user",
@@ -285,15 +344,68 @@ class InteractiveChatEnv(ChatEnv):
                     "content":  observation
                 }
             self.current_user_turn += 1
-            
-        print("Observation:", observation)
+
+        if done:
+            self.interaction_end_time = time.time()
+            info["time_to_resolution_seconds"] = (
+                time.perf_counter() - self._interaction_start_perf_counter
+                if self._interaction_start_perf_counter is not None
+                else None
+            )
+            info["interaction_start_time"] = self.interaction_start_time
+            info["interaction_end_time"] = self.interaction_end_time
         info["agent_actions"] = self.actions
         return str(observation), reward, done, info
+
+    def _is_lead_qualification_final_answer(self, content: str) -> bool:
+        if not isinstance(getattr(self, "task", None), dict):
+            return False
+        if self.task.get("task") != "lead_qualification":
+            return False
+        cleaned = (content or "").strip()
+        if not cleaned:
+            return False
+        if cleaned == "None":
+            return True
+        valid_factors = {"Budget", "Authority", "Need", "Timeline"}
+        parts = [part.strip() for part in cleaned.split(",")]
+        return bool(parts) and all(part in valid_factors for part in parts)
+
+    @staticmethod
+    def _lead_qualification_auto_stop_enabled() -> bool:
+        return os.environ.get("LEAD_DSL_AUTO_STOP_FINAL_ANSWER", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+
+    def _is_quote_approval_final_answer(self, content: str) -> bool:
+        if not isinstance(getattr(self, "task", None), dict):
+            return False
+        if self.task.get("task") != "quote_approval":
+            return False
+        cleaned = (content or "").strip()
+        return cleaned == "None" or bool(re.fullmatch(r"ka0[0-9A-Za-z]{12}(?:[0-9A-Za-z]{3})?", cleaned))
+
+    @staticmethod
+    def _quote_approval_auto_stop_enabled() -> bool:
+        return os.environ.get("QUOTE_DSL_AUTO_STOP_FINAL_ANSWER", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
     
     def reset(self, task_index: int = 0):
         _, metadata = super().reset(task_index=task_index)
         print(self.task)
-        initial_observation = self.user.reset(instruction=self.task["query"], persona=self.task["persona"])
+        self.interaction_start_time = time.time()
+        self._interaction_start_perf_counter = time.perf_counter()
+        self.interaction_end_time = None
+        initial_observation = self.user.reset(
+            instruction=self.task.get("query", ""),
+            persona=self.task.get("persona", ""),
+        )
+        print("Initial simulated user message:", initial_observation)
         self.current_user_turn = 0
         return initial_observation, metadata
     
@@ -611,13 +723,14 @@ class Evaluator(object):
 
     def _completion(self, messages: List[Dict[str, Any]]):
         completion_kwargs = {}
-        if self.api_base:
+        if self.api_base and _litellm_completion_supports_api_kwargs():
             completion_kwargs["api_base"] = self.api_base
-        if self.api_key:
+        if self.api_key and _litellm_completion_supports_api_kwargs():
             completion_kwargs["api_key"] = self.api_key
+        if _litellm_completion_supports_provider():
+            completion_kwargs["custom_llm_provider"] = self.provider
         return litellm.completion(
             model=self.model,
-            custom_llm_provider=self.provider,
             messages=messages,
             **completion_kwargs,
         )

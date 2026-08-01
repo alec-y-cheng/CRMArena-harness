@@ -1,5 +1,20 @@
 from typing import Optional, List, Dict, Any, Union
 from litellm import completion
+import inspect
+
+
+def _completion_accepts_kwargs() -> bool:
+    return inspect.getfullargspec(completion).varkw is not None
+
+
+def _completion_supports_provider() -> bool:
+    return "custom_llm_provider" in inspect.getfullargspec(completion).args or _completion_accepts_kwargs()
+
+
+def _completion_supports_api_kwargs() -> bool:
+    argspec = inspect.getfullargspec(completion)
+    return argspec.varkw is not None or "api_base" in argspec.args or "api_key" in argspec.args
+
 
 class LLMUserSimulationEnv(object):
     def __init__(
@@ -20,13 +35,14 @@ class LLMUserSimulationEnv(object):
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         completion_kwargs = {}
-        if self.api_base:
+        if self.api_base and _completion_supports_api_kwargs():
             completion_kwargs["api_base"] = self.api_base
-        if self.api_key:
+        if self.api_key and _completion_supports_api_kwargs():
             completion_kwargs["api_key"] = self.api_key
+        if _completion_supports_provider():
+            completion_kwargs["custom_llm_provider"] = self.provider
         res = completion(
             model=self.model,
-            custom_llm_provider=self.provider,
             messages=messages,
             **completion_kwargs,
         )
@@ -43,6 +59,7 @@ class LLMUserSimulationEnv(object):
         return f"""You are a user interacting with an agent. {instruction_display}
 Rules:
 - Just generate one line at a time to simulate the user's message.
+- You may reason internally, but your visible output must contain only the simulated user's message. Do not reveal a thinking process or analysis.
 - Do not give away all the instruction at once. For example, if there are multiple criteria like number of cases and time range, only give away one piece of those information once. It's okay if the instruction is under-specified.
 - Alternatively, if the task is about understanding the best transfer count of agent, you can start with an abstract term like "best performing agent" and then the agent should follow up what it means.
 - Do not hallucinate information that is not provided in the instruction. For example, if the agent asks for the order id but it is not mentioned in the instruction, do not make up an order id, just say you do not remember or have it.
@@ -55,6 +72,8 @@ Rules:
 - Try to make the conversation as natural as possible, and stick to the personalities in the instruction.
 - The agent may respond "None", which means the agent cannot find any record. In this case, you should reply "###STOP###" to end the conversation.
 - When the agent's response successfully fulfills the original instruction's goal, your reply should consist *only* of "###STOP###". Do not add any other text or pleasantries (e.g., "Thank you.").
+- If the instruction asks for a short classification, label, ID, name, or list, and the agent replies with a concise final answer such as "None", one label, or comma-separated labels, treat the goal as satisfied and reply only "###STOP###". Do not ask the agent to confirm, explain, or repeat the answer.
+- For lead qualification tasks, valid final answers are "None" or one or more of "Budget", "Authority", "Need", and "Timeline". When the agent replies with only those labels, reply only "###STOP###".
 
 # Example 1 (broad -> specific)
 Instruction: Which agent has the shortest handle time in Q2 in 2025?

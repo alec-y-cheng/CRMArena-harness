@@ -46,7 +46,11 @@ INTERACTIVE="${INTERACTIVE:-true}"
 MAX_TURNS="${MAX_TURNS:-20}"
 MAX_USER_TURNS="${MAX_USER_TURNS:-10}"
 MAX_TASKS_PER_CATEGORY="${MAX_TASKS_PER_CATEGORY:-0}"
-AGENT_MAX_TOKENS="${AGENT_MAX_TOKENS:-950}"
+AGENT_MAX_TOKENS="${AGENT_MAX_TOKENS:-2500}"
+LEAD_DSL_EXTRACTOR_MAX_TOKENS="${LEAD_DSL_EXTRACTOR_MAX_TOKENS:-1800}"
+LEAD_DSL_DISABLE_THINKING="${LEAD_DSL_DISABLE_THINKING:-true}"
+export LEAD_DSL_EXTRACTOR_MAX_TOKENS
+export LEAD_DSL_DISABLE_THINKING
 USE_SYNTACTIC_VERIFIER="${USE_SYNTACTIC_VERIFIER:-false}"
 MAX_VERIFIER_RETRIES="${MAX_VERIFIER_RETRIES:-3}"
 USE_WORKING_MEMORY="${USE_WORKING_MEMORY:-false}"
@@ -66,7 +70,7 @@ RESULT_SUFFIX="${RESULT_SUFFIX:-}"
 export OPENAI_API_KEY="$AGENT_API_KEY"
 export OPENAI_API_BASE="$AGENT_BASE_URL"
 export OPENAI_BASE_URL="$AGENT_BASE_URL"
-export HF_HOME="${HF_HOME:-/work/11669/aleccheng/vista/cache-vista/huggingface}"
+export HF_HOME="${HF_HOME:-/work/hdd/bgtb/acheng11/qwen_agent_ft/cache/huggingface}"
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
@@ -75,6 +79,11 @@ export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
 export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-1}"
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 SKIP_HEALTH_CHECKS="${SKIP_HEALTH_CHECKS:-false}"
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python || command -v python3 || true)}"
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "ERROR: neither python nor python3 is available on PATH. Load a Python module or set PYTHON_BIN." >&2
+  exit 127
+fi
 
 check_endpoint() {
   local label="$1"
@@ -172,6 +181,8 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
     echo "  judge=$JUDGE_MODEL @ $JUDGE_BASE_URL"
     echo "  user=$USER_MODEL @ $USER_BASE_URL"
     echo "  agent_max_tokens=$AGENT_MAX_TOKENS"
+    echo "  lead_dsl_extractor_max_tokens=$LEAD_DSL_EXTRACTOR_MAX_TOKENS"
+    echo "  lead_dsl_disable_thinking=$LEAD_DSL_DISABLE_THINKING"
     echo "  max_tasks_per_category=$MAX_TASKS_PER_CATEGORY"
     echo "  syntactic_verifier=$USE_SYNTACTIC_VERIFIER max_verifier_retries=$MAX_VERIFIER_RETRIES"
     echo "  working_memory=$USE_WORKING_MEMORY max_chars=$WORKING_MEMORY_MAX_CHARS"
@@ -181,7 +192,7 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
     echo "  scaffold_mode=$SCAFFOLD_MODE"
     echo "  log=$LOG_FILE"
 
-    python -u run_tasks.py \
+    "$PYTHON_BIN" -u run_tasks.py \
       --model "$AGENT_MODEL" \
       --task_category "$TASK_CATEGORY" \
       --agent_eval_mode "$EVAL_MODE" \

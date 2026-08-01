@@ -1,0 +1,876 @@
+{
+ "report": {
+  "total": 16,
+  "record_triggered": 13,
+  "subflow": 3,
+  "condition_extracted": 13,
+  "live": 15,
+  "dead": 1,
+  "no_source": 0
+ },
+ "flows": [
+  {
+   "name": "User clearance level decrement if more than 3 assets owned",
+   "sys_id": "4f116b5e83b032106beb74b6feaad312",
+   "liveness": {
+    "runs": 142,
+    "by_state": {
+     "ERROR": 8,
+     "COMPLETE": 134
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "alm_hardware",
+    "event": "insert_or_update",
+    "condition": "assigned_toVALCHANGES^assigned_toISNOTEMPTY",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "sys_user",
+     "u_user_group_clearance"
+    ],
+    "fields": [
+     "Asset Count",
+     "Assigned to",
+     "User Group Clearance Record"
+    ],
+    "lookups": [
+     {
+      "label": "3 - Look Up Record\u279bUser Group Clearance Record",
+      "table": "u_user_group_clearance"
+     }
+    ],
+    "writes": [
+     {
+      "label": "Trigger - Record Created or Updated\u279bHardware Record\u279bAssigned",
+      "table": "sys_user"
+     }
+    ]
+   },
+   "comparison_fields": [],
+   "count_preconditions": [
+    {
+     "table": "alm_hardware",
+     "link_field": "assigned_to",
+     "threshold": 3
+    }
+   ],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "assigned_to"
+   ]
+  },
+  {
+   "name": "Deactivated User Workflow",
+   "sys_id": "889f539a83b032106beb74b6feaad3ff",
+   "liveness": {
+    "runs": 56,
+    "by_state": {
+     "COMPLETE": 56
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "sys_user",
+    "event": "insert_or_update",
+    "condition": "active=false",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "sys_user"
+    ],
+    "fields": [
+     "User Record"
+    ],
+    "lookups": [],
+    "writes": [
+     {
+      "label": "Trigger - Record Created or Updated\u279bUser Record",
+      "table": "sys_user"
+     }
+    ]
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [
+    {
+     "sys_id": "3fa9579e837032106beb74b6feaad33c",
+     "name": "Escalate assigned user in task tables"
+    },
+    {
+     "sys_id": "9dfa09a983fcb2106beb74b6feaad3a8",
+     "name": "Escalate or cancel approval if user gets deactivated"
+    }
+   ],
+   "subflow_tables": [
+    "change_request",
+    "incident",
+    "problem",
+    "sysapproval_approver"
+   ],
+   "branch_fields": [
+    "manager"
+   ]
+  },
+  {
+   "name": "User - role change upon group assignment",
+   "sys_id": "755f639a833432106beb74b6feaad3ce",
+   "liveness": {
+    "runs": 141,
+    "by_state": {
+     "COMPLETE": 139,
+     "ERROR": 2
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "sys_user_grmember",
+    "event": "insert_or_update",
+    "condition": "^EQ",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "sys_user",
+     "sys_user_group",
+     "sys_user_has_role",
+     "sys_user_role"
+    ],
+    "fields": [
+     "Group",
+     "Manager",
+     "Role",
+     "Sys ID",
+     "User",
+     "User Role Record",
+     "User Role Records",
+     "role_exists"
+    ],
+    "lookups": [
+     {
+      "label": "2 - Look Up Records\u279bUser Role Records",
+      "table": "sys_user_has_role"
+     },
+     {
+      "label": "5 - Look Up Records\u279bUser Role Records",
+      "table": "sys_user_has_role"
+     },
+     {
+      "label": "1 - Look Up Record\u279bGroup Record\u279bManager",
+      "table": "sys_user"
+     }
+    ],
+    "writes": [
+     {
+      "label": "4 - For Each\u279bUser Role Record\u279bRole",
+      "table": "sys_user_role"
+     },
+     {
+      "label": "4 - For Each\u279bUser Role Record",
+      "table": "sys_user_has_role"
+     },
+     {
+      "label": "Trigger - Record Created\u279bGroup Member Record\u279bGroup\u279bSys ID",
+      "table": "sys_user_group"
+     },
+     {
+      "label": "Trigger - Record Created\u279bGroup Member Record\u279bUser",
+      "table": "sys_user"
+     },
+     {
+      "label": "Trigger - Record Created\u279bGroup Member Record\u279bGroup",
+      "table": "sys_user_group"
+     },
+     {
+      "label": "7 - For Each\u279bUser Role Record\u279bRole",
+      "table": "sys_user_role"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "manager"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "manager"
+   ]
+  },
+  {
+   "name": "Flag Articles upon User Changing Department",
+   "sys_id": "e7c9379e837432106beb74b6feaad38c",
+   "liveness": {
+    "runs": 39,
+    "by_state": {
+     "COMPLETE": 30,
+     "ERROR": 9
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "sys_user",
+    "event": "insert_or_update",
+    "condition": "departmentVALCHANGES",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "kb_knowledge",
+     "sys_user"
+    ],
+    "fields": [
+     "Sys ID"
+    ],
+    "lookups": [
+     {
+      "label": "1 - Look Up Record\u279bKnowledge Record\u279bSys ID",
+      "table": "kb_knowledge"
+     }
+    ],
+    "writes": []
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Incident - Automatic assignment to manager with priority 1",
+   "sys_id": "826e2316833432106beb74b6feaad3fe",
+   "liveness": {
+    "runs": 23,
+    "by_state": {
+     "ERROR": 20,
+     "COMPLETE": 3
+    },
+    "live": true
+   },
+   "health": "mostly_error",
+   "source": "imported",
+   "trigger": {
+    "table": "incident",
+    "event": "insert_or_update",
+    "condition": "urgency=1^impact=1",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "incident",
+     "sys_user"
+    ],
+    "fields": [
+     "Incident Record",
+     "Manager",
+     "Sys ID"
+    ],
+    "lookups": [
+     {
+      "label": "1 - Look Up Record\u279bUser Record\u279bManager",
+      "table": "sys_user"
+     }
+    ],
+    "writes": [
+     {
+      "label": "Trigger - Record Created or Updated\u279bIncident Record",
+      "table": "incident"
+     },
+     {
+      "label": "Trigger - Record Created or Updated\u279bIncident Record\u279bAssigned",
+      "table": "sys_user"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "manager"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "manager"
+   ]
+  },
+  {
+   "name": "Auto clearance level assignment for created hardware assets",
+   "sys_id": "6ec32f9283f032106beb74b6feaad3a4",
+   "liveness": {
+    "runs": 12,
+    "by_state": {
+     "COMPLETE": 12
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "alm_hardware",
+    "event": "insert_or_update",
+    "condition": "u_environmentISNOTEMPTY",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "alm_hardware"
+    ],
+    "fields": [
+     "Environment",
+     "Hardware Record"
+    ],
+    "lookups": [],
+    "writes": [
+     {
+      "label": "Trigger - Record Created or Updated\u279bHardware Record\u279bEnvironm",
+      "table": "alm_hardware"
+     },
+     {
+      "label": "Trigger - Record Created or Updated\u279bHardware Record",
+      "table": "alm_hardware"
+     }
+    ]
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Service Catalog Request Auto Approve",
+   "sys_id": "3753ab9e83b032106beb74b6feaad3b8",
+   "liveness": {
+    "runs": 23,
+    "by_state": {
+     "COMPLETE": 23
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "sc_request",
+    "event": "insert_or_update",
+    "condition": "^EQ",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "sc_request"
+    ],
+    "fields": [
+     "Request Record"
+    ],
+    "lookups": [],
+    "writes": [
+     {
+      "label": "Trigger - Record Created\u279bRequest Record",
+      "table": "sc_request"
+     }
+    ]
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Escalate assigned user in task tables",
+   "sys_id": "dd1b0da983fcb2106beb74b6feaad3d0",
+   "liveness": {
+    "runs": 168,
+    "by_state": {
+     "COMPLETE": 168
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": null,
+    "event": "unknown",
+    "condition": "",
+    "trigger_type": "subflow"
+   },
+   "structure": {
+    "tables": [
+     "change_request",
+     "incident",
+     "problem",
+     "sys_user"
+    ],
+    "fields": [
+     "Change Request Record",
+     "Change Request Records",
+     "Incident Record",
+     "Incident Records",
+     "Manager",
+     "Problem Record",
+     "Problem Records",
+     "Sys ID",
+     "Task Table"
+    ],
+    "lookups": [
+     {
+      "label": "2 - Look Up Records\u279bIncident Records",
+      "table": "incident"
+     },
+     {
+      "label": "9 - Look Up Records\u279bChange Request Records",
+      "table": "change_request"
+     },
+     {
+      "label": "16 - Look Up Records\u279bProblem Records",
+      "table": "problem"
+     }
+    ],
+    "writes": [
+     {
+      "label": "3 - For Each\u279bIncident Record",
+      "table": "incident"
+     },
+     {
+      "label": "10 - For Each\u279bChange Request Record",
+      "table": "change_request"
+     },
+     {
+      "label": "17 - For Each\u279bProblem Record",
+      "table": "problem"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "manager"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "manager"
+   ]
+  },
+  {
+   "name": "Asset location changes to transferred user's location",
+   "sys_id": "045c275683f032106beb74b6feaad3b5",
+   "liveness": {
+    "runs": 4,
+    "by_state": {
+     "COMPLETE": 4
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "alm_asset",
+    "event": "insert_or_update",
+    "condition": "assigned_toVALCHANGES^assigned_toISNOTEMPTY",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "alm_asset",
+     "cmn_location",
+     "sys_user"
+    ],
+    "fields": [
+     "Asset Record",
+     "Assigned to",
+     "Location",
+     "Sys ID"
+    ],
+    "lookups": [
+     {
+      "label": "1 - Look Up Record\u279bUser Record\u279bLocation",
+      "table": "cmn_location"
+     }
+    ],
+    "writes": []
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Unassign Asset on Clearance Change Exceeding Asset Clearance",
+   "sys_id": "81842f9283f032106beb74b6feaad3b3",
+   "liveness": {
+    "runs": 111,
+    "by_state": {
+     "COMPLETE": 111
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "u_user_group_clearance",
+    "event": "insert_or_update",
+    "condition": "u_clearance_levelVALCHANGES",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "alm_hardware",
+     "sys_user",
+     "u_user_group_clearance"
+    ],
+    "fields": [
+     "Clearance Level",
+     "Hardware Record",
+     "Hardware Records",
+     "Required Clearance",
+     "user"
+    ],
+    "lookups": [
+     {
+      "label": "1 - Look Up Records\u279bHardware Records",
+      "table": "alm_hardware"
+     }
+    ],
+    "writes": [
+     {
+      "label": "2 - For Each\u279bHardware Record\u279bRequired Clearance",
+      "table": "alm_hardware"
+     },
+     {
+      "label": "2 - For Each\u279bHardware Record",
+      "table": "alm_hardware"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "u_clearance"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "u_clearance_level"
+   ]
+  },
+  {
+   "name": "Asset Value Inflation - Add Hidden Costs",
+   "sys_id": "6c202b9283b032106beb74b6feaad34b",
+   "liveness": {
+    "runs": 191,
+    "by_state": {
+     "COMPLETE": 191
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "alm_hardware",
+    "event": "insert_or_update",
+    "condition": "costISNOTEMPTY",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "alm_hardware"
+    ],
+    "fields": [
+     "Hardware Record",
+     "Sys ID"
+    ],
+    "lookups": [],
+    "writes": [
+     {
+      "label": "Trigger - Record Created\u279bHardware Record\u279bSys ID",
+      "table": "alm_hardware"
+     },
+     {
+      "label": "Trigger - Record Created\u279bHardware Record",
+      "table": "alm_hardware"
+     }
+    ]
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Requested Item Manager Approval",
+   "sys_id": "d4a0864e87232300bdcf480688cb0bb1",
+   "liveness": {
+    "runs": 19,
+    "by_state": {
+     "COMPLETE": 8,
+     "WAITING": 11
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": null,
+    "event": "unknown",
+    "condition": "",
+    "trigger_type": "subflow"
+   },
+   "structure": {
+    "tables": [
+     "sc_req_item",
+     "sys_user"
+    ],
+    "fields": [
+     "Active",
+     "Approval State",
+     "Manager",
+     "Requested Item"
+    ],
+    "lookups": [],
+    "writes": []
+   },
+   "comparison_fields": [
+    "active",
+    "manager"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "active",
+    "manager"
+   ]
+  },
+  {
+   "name": "Auto Group Clearance Assignment",
+   "sys_id": "ead2675283f032106beb74b6feaad33f",
+   "liveness": {
+    "runs": 141,
+    "by_state": {
+     "COMPLETE": 141
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "sys_user_group",
+    "event": "insert_or_update",
+    "condition": "^EQ",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "sys_user_group"
+    ],
+    "fields": [
+     "Clearance Level",
+     "Group Record",
+     "Message",
+     "Sys ID"
+    ],
+    "lookups": [],
+    "writes": [
+     {
+      "label": "Trigger - Record Created\u279bGroup Record",
+      "table": "sys_user_group"
+     },
+     {
+      "label": "Trigger - Record Created\u279bGroup Record\u279bSys ID",
+      "table": "sys_user_group"
+     }
+    ]
+   },
+   "comparison_fields": [],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Escalate or cancel approval if user gets deactivated",
+   "sys_id": "77d805a583fcb2106beb74b6feaad3e8",
+   "liveness": {
+    "runs": 56,
+    "by_state": {
+     "COMPLETE": 56
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": null,
+    "event": "unknown",
+    "condition": "",
+    "trigger_type": "subflow"
+   },
+   "structure": {
+    "tables": [
+     "sys_user",
+     "sysapproval_approver"
+    ],
+    "fields": [
+     "Approval Record",
+     "Approval Records",
+     "Deactivated user",
+     "Manager"
+    ],
+    "lookups": [
+     {
+      "label": "1 - Look Up Records\u279bApproval Records",
+      "table": "sysapproval_approver"
+     }
+    ],
+    "writes": [
+     {
+      "label": "2 - For Each\u279bApproval Record",
+      "table": "sysapproval_approver"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "manager"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": [
+    "manager"
+   ]
+  },
+  {
+   "name": "problem_creation_from_incident_priority",
+   "sys_id": "596a335a833432106beb74b6feaad3ed",
+   "liveness": {
+    "runs": 0,
+    "by_state": {},
+    "live": false
+   },
+   "health": "dead",
+   "source": "imported",
+   "trigger": {
+    "table": "incident",
+    "event": "insert_or_update",
+    "condition": "problem_idISEMPTY^priorityIN1,2",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "incident",
+     "problem"
+    ],
+    "fields": [
+     "Impact",
+     "Incident Record",
+     "Problem Record",
+     "Sys ID",
+     "Urgency"
+    ],
+    "lookups": [],
+    "writes": [
+     {
+      "label": "1 - Create Record\u279bProblem Record",
+      "table": "problem"
+     },
+     {
+      "label": "Trigger - Record Created or Updated\u279bIncident Record",
+      "table": "incident"
+     },
+     {
+      "label": "Trigger - Record Created or Updated\u279bIncident Record\u279bImpact",
+      "table": "incident"
+     },
+     {
+      "label": "Trigger - Record Created or Updated\u279bIncident Record\u279bUrgency",
+      "table": "incident"
+     },
+     {
+      "label": "1 - Create Record\u279bProblem Record\u279bSys ID",
+      "table": "problem"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "impact",
+    "urgency"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  },
+  {
+   "name": "Match user clearance with group clearance workflow",
+   "sys_id": "d102a35e83b032106beb74b6feaad301",
+   "liveness": {
+    "runs": 110,
+    "by_state": {
+     "COMPLETE": 70,
+     "ERROR": 40
+    },
+    "live": true
+   },
+   "health": "ok",
+   "source": "imported",
+   "trigger": {
+    "table": "sys_user_grmember",
+    "event": "insert_or_update",
+    "condition": "userISNOTEMPTY",
+    "trigger_type": "record"
+   },
+   "structure": {
+    "tables": [
+     "sys_user",
+     "sys_user_group",
+     "u_user_group_clearance"
+    ],
+    "fields": [
+     "Clearance Level",
+     "Group",
+     "User",
+     "User Group Clearance Record"
+    ],
+    "lookups": [
+     {
+      "label": "2 - Look Up Record\u279bUser Group Clearance Record",
+      "table": "u_user_group_clearance"
+     },
+     {
+      "label": "1 - Look Up Record\u279bUser Group Clearance Record\u279bClearance Lev",
+      "table": "u_user_group_clearance"
+     }
+    ],
+    "writes": [
+     {
+      "label": "Trigger - Record Created\u279bGroup Member Record\u279bGroup",
+      "table": "sys_user_group"
+     },
+     {
+      "label": "Trigger - Record Created\u279bGroup Member Record\u279bUser",
+      "table": "sys_user"
+     }
+    ]
+   },
+   "comparison_fields": [
+    "u_clearance"
+   ],
+   "count_preconditions": [],
+   "subflows": [],
+   "subflow_tables": [],
+   "branch_fields": []
+  }
+ ]
+}
