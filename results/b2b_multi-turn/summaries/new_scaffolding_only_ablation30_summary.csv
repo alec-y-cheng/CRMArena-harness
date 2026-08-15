@@ -1,4 +1,0 @@
-task_type,n,successes,success_rate,submitted,max_turns,query_errors,invalid_actions,empty_content,api_errors,avg_reward,avg_em,avg_f1,nonzero_rewards,avg_model_calls,avg_env_steps,avg_prompt_tokens,avg_completion_tokens,avg_total_tokens,verifier_failure_tasks,verifier_failure_events,verifier_unknown_tasks,verifier_unknown_events,top_end_reasons
-case_routing,30,2,0.06666666666666667,25,0,0,1,0,4,0.06666666666666667,,,2,19.23076923076923,18.115384615384617,288133.23076923075,5679.346153846154,293812.57692307694,0,0,0,0,Submit action:25; Error: 'Subject':4; Invalid action:1
-lead_qualification,30,10,0.3333333333333333,26,3,0,1,0,0,0.3333333333333333,,,10,11.5,10.6,150838.5,4311.166666666667,155149.66666666666,0,0,0,0,Submit action:26; Max turns reached:3; Invalid action:1
-quote_approval,30,4,0.13333333333333333,30,0,0,0,0,0,0.13333333333333333,,,4,12.833333333333334,12.6,295480.5333333333,3518.233333333333,298998.76666666666,0,0,0,0,Submit action:30

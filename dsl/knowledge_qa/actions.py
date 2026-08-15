@@ -255,11 +255,15 @@ to an external customer.
 
 Use the fixed evidence taxonomy. Classify the selected span and proposed answer,
 not the entire retrieved article and not unrelated retrieved content. Public
-customer-facing support, care, warranty, return, service-channel,
-troubleshooting, and product overview evidence may be safe. Internal policy,
-private customer data, non-public company knowledge, operational metrics,
-internal sales/quote/routing/qualification policy, or unknown-sensitive evidence
-is not safe.
+customer-facing documentation may be safe when the selected answer only exposes
+information intended for external customers.
+
+Be stricter here than the initial router: if the selected span or proposed
+answer would expose non-public company knowledge, private customer data,
+internal operating evidence, commercial decision rules, or competitive/strategic
+evidence, classify it with the closest disallowed evidence type and set
+safe_to_use=false. When sensitivity is unclear from the selected evidence, use a
+disallowed or unknown-sensitive classification rather than approving it.
 
 Allowed evidence types:
 {allowed_evidence}

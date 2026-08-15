@@ -1,11 +1,11 @@
 import os
-from litellm import completion
 import litellm
 litellm.set_verbose = False
 from typing import Any, Dict, List, Optional
 import time, traceback
 from crm_sandbox.agents.prompts import SCHEMA_STRING, REACT_RULE_STRING, ACT_RULE_STRING, SYSTEM_METADATA, REACT_EXTERNAL_INTERACTIVE_PROMPT, REACT_INTERNAL_INTERACTIVE_PROMPT, REACT_INTERNAL_PROMPT, REACT_EXTERNAL_PROMPT, REACT_PRIVACY_AWARE_EXTERNAL_PROMPT, REACT_PRIVACY_AWARE_EXTERNAL_INTERACTIVE_PROMPT, ACT_PROMPT
 from crm_sandbox.agents.clipboards import LeadQualificationClipboard, QuoteApprovalClipboard
+from crm_sandbox.model_client import completion_with_provider, is_cli_provider
 from crm_sandbox.agents.utils import parse_wrapped_response, BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP
 from crm_sandbox.agents.working_memory import WorkingMemory
 from dsl.case_routing.harness import CaseRoutingDSLDriver
@@ -16,6 +16,7 @@ from dsl.external_facing.actions import (
 )
 from dsl.external_facing.harness import ExternalFacingRouter
 from dsl.external_facing.schemas import EXTERNAL_REQUEST_ROUTE_SCHEMA
+from dsl.general_runtime.schemas import DISCLOSURE_GATE_SCHEMA
 from dsl.knowledge_qa.harness import KnowledgeQADSLDriver
 from dsl.knowledge_qa.schemas import (
     KNOWLEDGE_QA_ANSWER_SCHEMA,
@@ -506,7 +507,7 @@ class ChatAgentDSL:
         structured_output_attempts=None,
     ):
         # sleep for non-openai models
-        if self.provider != "openai":
+        if self.provider != "openai" and not is_cli_provider(self.provider):
             time.sleep(5)
         # turn off thinking for gemini 2.5 flash
         if self.original_model_name == "gemini-2.5-flash-preview-04-17":
@@ -550,7 +551,7 @@ class ChatAgentDSL:
             if attempt_extra_body is not None:
                 attempt_kwargs["extra_body"] = attempt_extra_body
             try:
-                candidate_res = completion(**attempt_kwargs)
+                candidate_res = completion_with_provider(provider=self.provider, **attempt_kwargs)
                 candidate_message = candidate_res.choices[0].message.model_dump()
                 if attempt.get("require_content") and not self._model_message_content(candidate_message):
                     self.info.setdefault("structured_output_empty_content", []).append(
@@ -580,7 +581,7 @@ class ChatAgentDSL:
 
         if res is None:
             try:
-                res = completion(**completion_kwargs)
+                res = completion_with_provider(provider=self.provider, **completion_kwargs)
                 message = res.choices[0].message.model_dump()
                 self.info.setdefault("structured_output_modes", []).append("unstructured_fallback")
             except Exception:
@@ -748,7 +749,6 @@ class ChatAgentDSL:
                         route_info,
                         render_unavailable_response(),
                     )
-                    self._maybe_autostop_external_privacy_refusal(env, result)
                     reward = result.reward
                     break
                 result = self._respond_external_router(
@@ -764,8 +764,6 @@ class ChatAgentDSL:
                     route_info,
                     router.build_refusal(route),
                 )
-                if route.route == "refuse" or not gate.allowed:
-                    self._maybe_autostop_external_privacy_refusal(env, result)
             elif route.route == "knowledge_qa":
                 driver = KnowledgeQADSLDriver(
                     model_extractor=self._call_knowledge_qa_extractor,
@@ -810,8 +808,6 @@ class ChatAgentDSL:
                     },
                 )
 
-            if result.info.get("external_gate_refusal"):
-                self._maybe_autostop_external_privacy_refusal(env, result)
             reward = result.reward
             delegated_route = route.route in ("knowledge_qa", "named_entity_disambiguation")
             delegated_route = delegated_route or route_info.get("clarify_fallback") in (
@@ -888,34 +884,6 @@ class ChatAgentDSL:
         self.info["usage"] = self.usage
         self.info["total_cost"] = sum(cost for cost in self.usage["cost"] if cost is not None)
         self.info["num_turns"] = self.info.get("num_turns", (0, self.info.get("env_steps", 0)))
-
-    def _maybe_autostop_external_privacy_refusal(self, env, result) -> None:
-        enabled = os.environ.get("EXTERNAL_ROUTER_AUTO_STOP_PRIVACY_REFUSAL", "true").lower() in ["1", "true", "yes"]
-        if not enabled or result.done:
-            return
-        task = getattr(env, "task", {})
-        if not isinstance(task, dict) or task.get("reward_metric") != "privacy_rejection":
-            return
-        if not hasattr(env, "calculate_reward") or not getattr(env, "actions", None):
-            return
-        reward_info = env.calculate_reward()
-        result.reward = reward_info["reward"]
-        result.done = True
-        last_action = env.actions[-1]
-        result.info["end_reason"] = {
-            "source": "agent",
-            "message": "Submit action",
-            "content": last_action.get("content", ""),
-            "parsed_answer": reward_info["parsed_answer"],
-            "auto_stop": "external_router_privacy_refusal",
-        }
-        if hasattr(env, "interaction_start_time"):
-            env.interaction_end_time = time.time()
-            result.info["interaction_start_time"] = env.interaction_start_time
-            result.info["interaction_end_time"] = env.interaction_end_time
-        start_counter = getattr(env, "_interaction_start_perf_counter", None)
-        if start_counter is not None:
-            result.info["time_to_resolution_seconds"] = time.perf_counter() - start_counter
 
     @staticmethod
     def _external_router_conversation(messages: List[Dict[str, str]]) -> str:
@@ -1031,6 +999,8 @@ class ChatAgentDSL:
             for message in messages
             if message.get("role") == "system"
         )
+        if "final selected-evidence disclosure gate" in system_text:
+            return DISCLOSURE_GATE_SCHEMA
         if "extract product/entity" in system_text or "purchase-time slots" in system_text:
             return NED_EXTRACTION_SCHEMA
         if "clarification question" in system_text:
@@ -1046,6 +1016,8 @@ class ChatAgentDSL:
             for message in messages
             if message.get("role") == "system"
         )
+        if "final selected-evidence disclosure gate" in system_text:
+            return "selected_evidence_disclosure_gate"
         if "extract product/entity" in system_text or "purchase-time slots" in system_text:
             return "ned_extraction"
         if "clarification question" in system_text:
@@ -1152,6 +1124,8 @@ class ChatAgentDSL:
             for message in messages
             if message.get("role") == "system"
         )
+        if "final selected-evidence disclosure gate" in system_text:
+            return DISCLOSURE_GATE_SCHEMA
         if "search terms" in system_text:
             return KNOWLEDGE_QA_SEARCH_PLAN_SCHEMA
         if "classify selected knowledge" in system_text or "selected knowledge" in system_text or "article evidence" in system_text:
@@ -1167,6 +1141,8 @@ class ChatAgentDSL:
             for message in messages
             if message.get("role") == "system"
         )
+        if "final selected-evidence disclosure gate" in system_text:
+            return "selected_evidence_disclosure_gate"
         if "search terms" in system_text:
             return "knowledge_qa_search_plan"
         if "classify selected knowledge" in system_text or "selected knowledge" in system_text or "article evidence" in system_text:

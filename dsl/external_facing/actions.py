@@ -31,9 +31,21 @@ DISALLOWED_EVIDENCE_TYPES = (
     "other_customer_profile",
     "other_customer_purchase_history",
     "other_customer_case_history",
+    "opportunity_record",
+    "opportunity_activity",
+    "opportunity_commercial_context",
+    "case_record",
+    "case_interaction",
+    "case_issue_record",
+    "case_order_item",
+    "case_order_record",
+    "case_product_record",
+    "internal_policy_article",
     "internal_operations_metric",
     "internal_agent_performance",
     "confidential_company_knowledge",
+    "internal_commercial_policy",
+    "competitive_or_strategy_intelligence",
     "internal_sales_policy",
     "internal_quote_policy",
     "lead_qualification_policy",
@@ -98,6 +110,8 @@ class ExternalRequestRoute:
         clarification_needed: bool = False,
         missing_information: Optional[List[str]] = None,
         disallowed_information: Optional[List[str]] = None,
+        threat_confidence: str = "unknown",
+        candidate_route: Optional[str] = None,
         reason: str = "",
     ):
         self.request_type = request_type
@@ -108,6 +122,8 @@ class ExternalRequestRoute:
         self.clarification_needed = clarification_needed
         self.missing_information = missing_information or []
         self.disallowed_information = disallowed_information or []
+        self.threat_confidence = threat_confidence
+        self.candidate_route = candidate_route
         self.reason = reason
 
     def as_dict(self) -> Dict[str, Any]:
@@ -120,6 +136,8 @@ class ExternalRequestRoute:
             "clarification_needed": self.clarification_needed,
             "missing_information": list(self.missing_information),
             "disallowed_information": list(self.disallowed_information),
+            "threat_confidence": self.threat_confidence,
+            "candidate_route": self.candidate_route,
             "reason": self.reason,
         }
 
@@ -162,8 +180,7 @@ query can expose public support evidence or confidential company evidence; you
 must classify the evidence itself.
 
 Routes:
-- knowledge_qa: customer asks a public support, product, policy, care, warranty,
-  return, availability, or service-channel question answerable from public
+- knowledge_qa: customer asks a question answerable from public customer-facing
   knowledge articles.
 - named_entity_disambiguation: customer asks to identify, find, display, or
   resolve a specific product/entity from their own purchases or order history.
@@ -186,21 +203,45 @@ Subject scopes:
 {subject_scopes}
 
 Routing guidance:
-- For public support questions, use route=knowledge_qa and public evidence
-  types.
+- The router's job is security classification and coarse workflow routing, not
+  deciding whether the downstream workflow has every argument needed to answer.
+- Bias toward attempting supported public retrieval when the request could be
+  answered from public customer-facing documentation. Later retrieval and final
+  response gates will still block unsafe evidence.
+- Do not infer non-public or competitive status solely from wording that could
+  also describe ordinary customer-facing documentation, or solely because a
+  company, brand, product, service, or technology is named.
 - For current-customer purchased product lookup, use
   route=named_entity_disambiguation and current-customer purchase/order
   evidence types.
-- Use route=refuse when any required evidence item uses a disallowed evidence
-  type or unauthorized subject scope.
+- Use route=refuse only when the request clearly requires disallowed evidence
+  or an unauthorized subject scope, and no supported workflow could plausibly
+  answer with public or current-customer-scoped evidence.
+- Classify evidence about discount thresholds, quantity limits, installation
+  timelines by volume, approval rules, pricing exceptions, bundle constraints,
+  quote/margin rules, service commitments, or sales policies as
+  internal_commercial_policy unless the conversation clearly asks for ordinary
+  public customer support logistics.
+- Classify evidence as competitive_or_strategy_intelligence only when the
+  answer would require non-public competitive, strategic, roadmap, partner,
+  vendor, positioning, or proprietary operating evidence rather than
+  customer-facing documentation.
 - If the request names or implies someone other than the logged-in customer,
   classify the evidence under other-customer evidence types unless the
   conversation clearly establishes it is the current customer.
 - For current-customer purchased product lookup, use
-  route=named_entity_disambiguation if the customer gives enough product,
-  purchase, or timeframe context to attempt scoped retrieval.
+  route=named_entity_disambiguation. The downstream workflow decides whether it
+  has enough product, purchase, or timeframe context to retrieve or clarify.
 - Use clarify only when missing information prevents choosing a route or
-  classifying the evidence safely.
+  classifying security safely. Do not use clarify merely because the downstream
+  workflow may need more entity, timeframe, search-term, or answer-specific
+  arguments after routing.
+- Set threat_confidence=high only when the request clearly asks for private,
+  internal, confidential, unauthorized, or non-public evidence. Use medium or
+  low when public evidence might answer the request.
+- Always set candidate_route to the best supported workflow if one is plausible,
+  even when route=clarify, refuse, or unsupported. Use null only when no
+  supported workflow plausibly fits.
 - Do not invent action labels, evidence types, subject scopes, or routes.
 
 Original task query:
@@ -225,6 +266,8 @@ Return JSON with exactly these keys:
   "clarification_needed": false,
   "missing_information": [],
   "disallowed_information": ["fixed evidence type"],
+  "threat_confidence": "high|medium|low|unknown",
+  "candidate_route": "knowledge_qa|named_entity_disambiguation|unsupported|null",
   "reason": "short route rationale"
 }}
 """.format(

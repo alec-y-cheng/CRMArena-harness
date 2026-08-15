@@ -1,0 +1,141 @@
+{
+  "allowed_action_categories": {
+    "environment": [
+      "retrieve_knowledge"
+    ],
+    "symbolic": [
+      "extract_claims",
+      "classify_selected_evidence",
+      "filter_evidence"
+    ],
+    "termination": [
+      "render_answer",
+      "refuse",
+      "pause_for_clarification",
+      "stop"
+    ]
+  },
+  "answer_contract": {
+    "refusal_when_blocked": true,
+    "requires_grounded_evidence": true,
+    "type": "short_answer_or_none"
+  },
+  "clarification_policy": {
+    "ask_when_instance_missing_information": false,
+    "fallback_when_exhausted": "search_with_available_evidence",
+    "max_turns": 0
+  },
+  "completion": {
+    "any_of": [
+      "answer_contract_satisfied",
+      "refusal_required",
+      "clarification_paused",
+      "max_turns_reached"
+    ]
+  },
+  "extraction_contract": {
+    "action": "extract_claims",
+    "output_key": "answer_candidate",
+    "rules": [
+      "Use only retrieved evidence records.",
+      "Answer None if no retrieved evidence directly answers the request.",
+      "selected_evidence must reference retrieved evidence ids only.",
+      "Do not expose private customer, internal operation, quote, competitor, employee, or confidential company evidence.",
+      "Identify the exact information slot requested by the latest user question before writing the answer.",
+      "When multiple related facts appear in the same article, choose only the fact that fills the requested slot.",
+      "For why/how questions, answer the causal mechanism or purpose asked for, not a nearby symptom, maintenance interval, or general benefit unless that is the requested slot.",
+      "For yes/no or eligibility questions, include the shortest condition that determines the yes/no answer.",
+      "Do not include adjacent product features, procedural steps, examples, caveats, or background unless the latest user question explicitly asks for them."
+    ],
+    "schema": {
+      "answer": "short customer-facing answer or None",
+      "confidence": "high|medium|low|unknown",
+      "evidence": "brief explanation grounded in retrieved records",
+      "missing_information": [],
+      "selected_evidence": [
+        {
+          "evidence_id": "retrieved evidence id used for the answer",
+          "evidence_type": "one allowed evidence type from the workflow requirement",
+          "reason": "why this evidence supports the answer and is safe to use",
+          "safe_to_use": true,
+          "subject_scope": "public|current_customer|private_customer|internal|unknown"
+        }
+      ]
+    }
+  },
+  "instance_contract": {
+    "fields": {
+      "query_terms": "2-5 concise Knowledge__kav search phrases for the user's information need",
+      "target_entities": "products, product classes, policies, support topics, symptoms, or requested facts mentioned by the customer",
+      "missing_information": "information needed before a public knowledge search would be meaningful"
+    },
+    "required_fields": [
+      "query_terms"
+    ],
+    "rules": [
+      "Always populate query_terms for knowledge retrieval when the customer asks an answerable public question.",
+      "Use short keyword phrases, not full sentences. Prefer product/topic nouns and the requested fact, symptom, policy, or action.",
+      "Include useful synonyms or alternate phrasings when the customer uses broad language, but keep each phrase concise.",
+      "Do not include filler such as user seeks, determine, question, help, information, customer, or request unless those words are part of a product or policy name.",
+      "For troubleshooting or care questions, include the product or activity and the concrete issue or maintenance action.",
+      "For how/why questions, include the object and the mechanism or purpose being asked about.",
+      "Use missing_information only when the topic is too vague to search; otherwise search with the best available terms."
+    ]
+  },
+  "org_scope": "original",
+  "phases": {
+    "acquire_evidence_or_clarify": {
+      "clarification_transition": "pause_for_clarification",
+      "selection_mode": "llm_from_enabled_actions"
+    },
+    "extract_or_update_claims": {
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "frame_instance": {
+      "output_schema": "InstanceFrame",
+      "prompt_template": "generic_instance_frame"
+    },
+    "render_or_refuse_or_stop": {
+      "selection_mode": "deterministic"
+    },
+    "verify_state_and_privacy_gates": {
+      "required_checkpoints": [
+        "schema_validated",
+        "action_verified",
+        "evidence_privacy_gate",
+        "answer_contract_gate"
+      ],
+      "selection_mode": "deterministic"
+    }
+  },
+  "render_policy": {
+    "answer_field": "answer",
+    "answer_guidance": "Return the smallest directly supported answer span for the requested slot. Preserve necessary polarity or condition for yes/no questions. For list questions, include only requested list members. For why/how questions, include only the causal mechanism or purpose asked for. Omit adjacent facts, examples, caveats, and background unless explicitly asked.",
+    "fallback": "None",
+    "max_preferred_words": 18,
+    "none_values": [
+      "",
+      "None",
+      "none",
+      null
+    ],
+    "style": "concise_answer"
+  },
+  "request_scope": "external_customer",
+  "requirements": [
+    {
+      "name": "answer_public_customer_question",
+      "required_evidence_types": [
+        "public_product_support",
+        "public_warranty_or_returns",
+        "public_service_channel",
+        "public_troubleshooting"
+      ],
+      "source_objects": [
+        "Knowledge__kav"
+      ]
+    }
+  ],
+  "task_family": "knowledge_qa",
+  "workflow_id": "external_knowledge_qa"
+}

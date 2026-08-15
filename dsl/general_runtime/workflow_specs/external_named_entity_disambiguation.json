@@ -1,0 +1,146 @@
+{
+  "allowed_action_categories": {
+    "environment": [
+      "query_current_customer",
+      "query_product_catalog",
+      "query_purchase_history"
+    ],
+    "symbolic": [
+      "rank_candidates",
+      "extract_claims"
+    ],
+    "termination": [
+      "render_answer",
+      "refuse",
+      "pause_for_clarification",
+      "stop"
+    ]
+  },
+  "answer_contract": {
+    "refusal_when_blocked": true,
+    "requires_grounded_evidence": true,
+    "type": "entity_id_or_none"
+  },
+  "clarification_policy": {
+    "ask_when_instance_missing_information": false,
+    "fallback_when_exhausted": "unavailable",
+    "max_turns": 3
+  },
+  "completion": {
+    "any_of": [
+      "answer_contract_satisfied",
+      "refusal_required",
+      "clarification_paused",
+      "max_turns_reached"
+    ]
+  },
+  "extraction_contract": {
+    "action": "extract_claims",
+    "output_key": "answer_candidate",
+    "rules": [
+      "Return a Product2.Id only if it appears in current-customer purchase history.",
+      "Product catalog records can explain names/descriptions but cannot prove ownership.",
+      "Return None if no retrieved purchase record matches the customer product/entity description and timeframe.",
+      "If exactly one purchased Product2 record materially matches the requested product class, type, or distinguishing modifiers better than the other purchased records, return that Product2.Id.",
+      "Do not mark a request ambiguous merely because other purchased products share a broad category, activity, or brand-adjacent word when their product type differs from the requested item.",
+      "Set missing_information only when multiple purchased products remain genuinely ambiguous after comparing Product2 names/descriptions and the customer-visible product phrase."
+    ],
+    "schema": {
+      "answer": "Product2.Id from current-customer purchase evidence, or None",
+      "confidence": "high|medium|low|unknown",
+      "evidence": "brief explanation grounded in purchase records and product catalog records",
+      "missing_information": [],
+      "selected_evidence": [
+        {
+          "evidence_id": "retrieved OrderItem or Product2 evidence id used for the answer",
+          "evidence_type": "current_customer_purchase_history or product_catalog",
+          "reason": "why this evidence supports the selected Product2.Id and is safe to use",
+          "safe_to_use": true,
+          "subject_scope": "current_customer or public"
+        }
+      ]
+    }
+  },
+  "instance_contract": {
+    "fields": {
+      "constraints": [
+        {
+          "end_date": "YYYY-MM-DD inclusive, derived from customer timeframe and runtime metadata today",
+          "is_valid_for_retrieval": "boolean; true only when the customer gave a concrete timeframe specific enough to query purchase history",
+          "source_text": "customer phrase such as last week or July 1",
+          "start_date": "YYYY-MM-DD inclusive, derived from customer timeframe and runtime metadata today",
+          "type": "purchase_date_window"
+        }
+      ],
+      "missing_information": "product/entity detail or purchase timeframe needed before scoped retrieval is meaningful",
+      "product_terms": "concise product catalog search terms from the customer request",
+      "target_entities": "customer product/entity references and distinguishing attributes"
+    },
+    "required_fields": [
+      "product_terms",
+      "purchase_date_window"
+    ],
+    "rules": [
+      "Use runtime metadata for the current customer scope; do not ask the customer for internal ids if the runtime metadata supplies them.",
+      "If product/entity detail and purchase timeframe are present, do not request clarification.",
+      "For purchase_date_window constraints, set is_valid_for_retrieval=false when the customer's timeframe is too broad or vague to retrieve against reliably.",
+      "If is_valid_for_retrieval=false, include purchase date or timeframe in missing_information.",
+      "Normalize relative purchase dates using metadata.today when present."
+    ]
+  },
+  "org_scope": "original",
+  "phases": {
+    "acquire_evidence_or_clarify": {
+      "clarification_transition": "pause_for_clarification",
+      "selection_mode": "llm_from_enabled_actions"
+    },
+    "extract_or_update_claims": {
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "frame_instance": {
+      "output_schema": "InstanceFrame",
+      "prompt_template": "generic_instance_frame"
+    },
+    "render_or_refuse_or_stop": {
+      "selection_mode": "deterministic"
+    },
+    "verify_state_and_privacy_gates": {
+      "required_checkpoints": [
+        "schema_validated",
+        "action_verified",
+        "evidence_privacy_gate",
+        "answer_contract_gate"
+      ],
+      "selection_mode": "deterministic"
+    }
+  },
+  "render_policy": {
+    "answer_field": "answer",
+    "fallback": "None",
+    "none_values": [
+      "",
+      "None",
+      "none",
+      null
+    ],
+    "style": "id_or_none"
+  },
+  "request_scope": "external_customer",
+  "requirements": [
+    {
+      "name": "resolve_current_customer_product",
+      "required_evidence_types": [
+        "current_customer_purchase_history",
+        "current_customer_order_history",
+        "product_catalog"
+      ],
+      "source_objects": [
+        "Order",
+        "OrderItem",
+        "Product2"
+      ]
+    }
+  ],
+  "task_family": "named_entity_disambiguation",
+  "workflow_id": "external_named_entity_disambiguation"
+}

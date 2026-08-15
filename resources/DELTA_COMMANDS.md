@@ -144,6 +144,42 @@ echo "Started wrapper PID: $!"
 echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
 ```
 
+### Targeted External Gate Regression Benchmark
+
+Runs 25 examples each for the affected tasks after knowledge-article gate changes:
+
+- `original/knowledge_qa`
+- `b2b/confidential_company_knowledge`
+
+Run this from the same compute node as the vLLM server at `127.0.0.1:8001`.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RUN_NAME="external_gate_regression_25_node_$(date +%Y%m%d_%H%M)"
+nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  QWEN_BASE_URL=http://127.0.0.1:8001/v1 \
+  QWEN_MODEL=openai/Qwen3.5-35B-A3B \
+  MAX_TASKS_PER_CATEGORY=25 \
+  REGULAR_EXTERNAL_TASKS_CSV=knowledge_qa \
+  CONFIDENTIALITY_TASKS_CSV=confidential_company_knowledge \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RUN_NAME"' \
+  ./run_tasks_crmarena_pro_external_full.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+echo "Started wrapper PID: $!"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+```
+
 ### Direct Full Lead Qualification Benchmark
 
 ```bash
@@ -477,4 +513,974 @@ nohup bash -lc '
 
 echo "Started wrapper PID: $!"
 echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+```
+
+## General Runtime DSL Runs
+
+These commands exercise the shared `general_dsl` agent path. Run them from the same compute node as the vLLM server at `127.0.0.1:8001`; they are node-local `nohup` wrappers, not Slurm overlap jobs.
+
+### General Runtime External + Confidentiality Smoke Test
+
+Runs 5 examples each for all external-facing and confidentiality tasks:
+
+- `original/knowledge_qa`
+- `original/named_entity_disambiguation`
+- `b2b/private_customer_information`
+- `b2b/internal_operation_data`
+- `b2b/confidential_company_knowledge`
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RUN_NAME="general_runtime_external_conf_5_node_$(date +%Y%m%d_%H%M)"
+nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  QWEN_BASE_URL=http://127.0.0.1:8001/v1 \
+  QWEN_MODEL=openai/Qwen3.5-35B-A3B \
+  AGENT_STRATEGY=general_dsl \
+  USE_EXTERNAL_ROUTER_DSL=true \
+  REGULAR_EXTERNAL_TASKS_CSV=knowledge_qa,named_entity_disambiguation \
+  CONFIDENTIALITY_TASKS_CSV=private_customer_information,internal_operation_data,confidential_company_knowledge \
+  MAX_TASKS_PER_CATEGORY=8 \
+  INTERACTIVE=true \
+  MAX_TURNS=20 \
+  MAX_USER_TURNS=10 \
+  AGENT_MAX_TOKENS=2500 \
+  KNOWLEDGE_QA_DSL_EXTRACTOR_MAX_TOKENS=1800 \
+  KNOWLEDGE_QA_DSL_DISABLE_THINKING=true \
+  NED_DSL_EXTRACTOR_MAX_TOKENS=1600 \
+  NED_DSL_DISABLE_THINKING=true \
+  EXTERNAL_ROUTER_MAX_TOKENS=900 \
+  EXTERNAL_ROUTER_DISABLE_THINKING=true \
+  MAX_VERIFIER_RETRIES=3 \
+  ROUTING_MODE=none \
+  SCAFFOLD_MODE=none \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RUN_NAME"' \
+  ./run_tasks_crmarena_pro_external_full.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+WRAPPER_PID=$!
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Check running: ps -fp ${WRAPPER_PID}; pgrep -af 'run_tasks_crmarena_pro|run_tasks.py|${RUN_NAME}'"
+echo "Stop wrapper/process group: kill -- -${WRAPPER_PID} || kill ${WRAPPER_PID}"
+```
+
+
+kill a job with
+kill -- -WRAPPER_PID
+
+## OpenRouter User/Judge Smoke Tests
+
+These commands keep the agent on the local Qwen vLLM server, but run the simulated user and evaluator through OpenRouter. Set `OPENROUTER_API_KEY` before running.
+
+The default OpenRouter user/judge model is `openai/gpt-4o-2024-11-20`, matching the GPT-4o version listed in the CRMArena-Pro paper's model specification. For a cheap plumbing test, explicitly override `OPENROUTER_DEFAULT_MODEL`, `JUDGE_MODEL`, and `USER_MODEL` to a free model.
+
+### One-Task OpenRouter GPT-4o User/Judge Smoke Test
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+export OPENROUTER_API_KEY="sk-or-v1-..."
+
+RUN_NAME="openrouter_gpt4o_user_judge_smoke_$(date +%Y%m%d_%H%M)"
+nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  QWEN_BASE_URL=http://127.0.0.1:8001/v1 \
+  QWEN_MODEL=openai/Qwen3.5-35B-A3B \
+  AGENT_PROVIDER=openai \
+  AGENT_STRATEGY=general_dsl \
+  JUDGE_PROVIDER=openrouter \
+  USER_PROVIDER=openrouter \
+  JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+  USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+  OPENROUTER_API_KEY='"$OPENROUTER_API_KEY"' \
+  TASKS_CSV=knowledge_qa \
+  ORG_TYPES_CSV=original \
+  MAX_TASKS_PER_CATEGORY=1 \
+  INTERACTIVE=true \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RUN_NAME"' \
+  ./run_tasks_crmarena_pro.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+WRAPPER_PID=$!
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Stop wrapper/process group: kill -- -${WRAPPER_PID} || kill ${WRAPPER_PID}"
+```
+
+### Full External Suite With OpenRouter GPT-4o User/Judge
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+export OPENROUTER_API_KEY="sk-or-v1-..."
+
+RUN_NAME="general_runtime_external_openrouter_gpt4o_user_judge_$(date +%Y%m%d_%H%M)"
+nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  QWEN_BASE_URL=http://127.0.0.1:8001/v1 \
+  QWEN_MODEL=openai/Qwen3.5-35B-A3B \
+  AGENT_PROVIDER=openai \
+  AGENT_STRATEGY=general_dsl \
+  JUDGE_PROVIDER=openrouter \
+  USER_PROVIDER=openrouter \
+  JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+  USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+  OPENROUTER_API_KEY='"$OPENROUTER_API_KEY"' \
+  REGULAR_EXTERNAL_TASKS_CSV=knowledge_qa,named_entity_disambiguation \
+  CONFIDENTIALITY_TASKS_CSV=private_customer_information,internal_operation_data,confidential_company_knowledge \
+  MAX_TASKS_PER_CATEGORY=0 \
+  INTERACTIVE=true \
+  MAX_TURNS=20 \
+  MAX_USER_TURNS=10 \
+  AGENT_MAX_TOKENS=2500 \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RUN_NAME"' \
+  ./run_tasks_crmarena_pro_external_full.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+WRAPPER_PID=$!
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Stop wrapper/process group: kill -- -${WRAPPER_PID} || kill ${WRAPPER_PID}"
+```
+
+### Cheap Free-Model Plumbing Override
+
+Use this only for checking that OpenRouter plumbing works. Do not use it for comparable benchmark reporting.
+
+```bash
+OPENROUTER_DEFAULT_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free \
+JUDGE_PROVIDER=openrouter \
+JUDGE_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free \
+USER_PROVIDER=openrouter \
+USER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+```
+
+The Python harness normalizes these to OpenRouter/LiteLLM format.
+
+## CLI Agent Baseline Runs
+
+These commands benchmark a CLI-hosted agent through the CRMArena harness. They are intended for raw model-agent baselines, so they use:
+
+- `AGENT_STRATEGY=react`
+- no symbolic DSL routing
+- no syntactic verifier
+- no working memory / clipboards
+- standard interactive loop limits: `MAX_TURNS=20`, `MAX_USER_TURNS=10`
+- stateless CLI calls through the adapter:
+  - Codex: `codex exec --ephemeral`
+  - Claude: `claude --print --no-session-persistence`
+
+Credentials and CLI model defaults are loaded from:
+
+```bash
+/work/hdd/bgtb/acheng11/.model-configs.txt
+```
+
+### Codex CLI + OpenRouter GPT-4o User/Judge, 2 Tasks Each
+
+Runs one task from each external/confidentiality category:
+
+- `original/knowledge_qa`
+- `original/named_entity_disambiguation`
+- `b2b/private_customer_information`
+- `b2b/internal_operation_data`
+- `b2b/confidential_company_knowledge`
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RUN_NAME="codex_cli_openrouter_gpt4o_external_conf_2each_$(date +%Y%m%d_%H%M)"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+  MODEL_CONFIG_FILE=/dev/null \
+  QWEN_MODEL=default \
+  QWEN_BASE_URL= \
+  AGENT_PROVIDER=codex_cli \
+  CODEX_CLI_MODEL="${CODEX_CLI_MODEL:-default}" \
+  AGENT_REASONING_MODE=default \
+  AGENT_STRATEGY=react \
+  JUDGE_PROVIDER=openrouter \
+  USER_PROVIDER=openrouter \
+  JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+  USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+  REGULAR_EXTERNAL_TASKS_CSV=knowledge_qa,named_entity_disambiguation \
+  CONFIDENTIALITY_TASKS_CSV=private_customer_information,internal_operation_data,confidential_company_knowledge \
+  MAX_TASKS_PER_CATEGORY=2 \
+  INTERACTIVE=true \
+  PRIVACY_AWARE_PROMPT=true \
+  MAX_TURNS=20 \
+  MAX_USER_TURNS=10 \
+  AGENT_MAX_TOKENS=2500 \
+  USE_SYNTACTIC_VERIFIER=false \
+  USE_WORKING_MEMORY=false \
+  USE_QUOTE_CLIPBOARD=false \
+  USE_LEAD_CLIPBOARD=false \
+  ROUTING_MODE=none \
+  SCAFFOLD_MODE=none \
+  SKIP_HEALTH_CHECKS=true \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RUN_NAME"' \
+  ./run_tasks_crmarena_pro_external_full.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Node: $(hostname)"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+To resume the same PVI result folder after deleting quota-limit rows, keep the
+same `RESULT_RUN_TAG` and use a fresh `LOG_NAME`. This version explicitly
+activates the CRM Arena Python environment so imports like `dotenv` resolve:
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+
+module purge >/dev/null 2>&1 || true
+module load gcc-native
+module load cudatoolkit/25.5_12.9
+module load python/miniforge3_pytorch/2.10.0
+source .venv-crm-modern/bin/activate
+
+set -a
+source /work/hdd/bgtb/acheng11/.model-configs.txt
+set +a
+
+RESULT_RUN_TAG="claude_cli_opus_react_pvi_full_20260809_1550"
+LOG_NAME="${RESULT_RUN_TAG}_resume_$(date +%Y%m%d_%H%M)"
+
+MODEL_CONFIG_FILE=/dev/null \
+AGENT_MODEL=claude_cli \
+AGENT_PROVIDER=claude_cli \
+CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench \
+CLAUDE_CLI_MODEL="${CLAUDE_CLI_MODEL:-claude-opus-5}" \
+AGENT_REASONING_MODE=default \
+AGENT_STRATEGY=react \
+TASKS_CSV=policy_violation_identification \
+ORG_TYPES_CSV=b2b \
+JUDGE_PROVIDER=openrouter \
+USER_PROVIDER=openrouter \
+JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+MAX_TASKS_PER_CATEGORY=0 \
+INTERACTIVE=true \
+PRIVACY_AWARE_PROMPT=false \
+ROUTING_MODE=none \
+SCAFFOLD_MODE=none \
+SKIP_HEALTH_CHECKS=true \
+RUN_TAG="$RESULT_RUN_TAG" \
+LOG_TAG="$LOG_NAME" \
+PYTHON_BIN="$(command -v python)" \
+./run_tasks_crmarena_pro.sh
+```
+
+### Codex CLI + OpenRouter GPT-4o User/Judge, Full External/Confidentiality Benchmark
+
+Runs all examples for:
+
+- `original/knowledge_qa`
+- `original/named_entity_disambiguation`
+- `b2b/private_customer_information`
+- `b2b/internal_operation_data`
+- `b2b/confidential_company_knowledge`
+
+This is the prompt-only privacy-aware raw ReAct baseline. It uses `AGENT_STRATEGY=react`, no symbolic DSL, no verifier, no working memory, and `PRIVACY_AWARE_PROMPT=true`.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RESULT_RUN_TAG="codex_cli_openrouter_gpt4o_external_conf_full_20260802_2328"
+RUN_NAME="${RESULT_RUN_TAG}_resume_$(date +%Y%m%d_%H%M)"
+LOG_NAME="$RUN_NAME"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+  MODEL_CONFIG_FILE=/dev/null \
+  QWEN_MODEL=default \
+  QWEN_BASE_URL= \
+  AGENT_PROVIDER=codex_cli \
+  CODEX_CLI_MODEL="${CODEX_CLI_MODEL:-gpt-5.6-sol}" \
+  AGENT_REASONING_MODE=default \
+  AGENT_STRATEGY=react \
+  JUDGE_PROVIDER=openrouter \
+  USER_PROVIDER=openrouter \
+  JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+  USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+  REGULAR_EXTERNAL_TASKS_CSV=knowledge_qa,named_entity_disambiguation \
+  CONFIDENTIALITY_TASKS_CSV=private_customer_information,internal_operation_data,confidential_company_knowledge \
+  MAX_TASKS_PER_CATEGORY=0 \
+  INTERACTIVE=true \
+  PRIVACY_AWARE_PROMPT=true \
+  MAX_TURNS=20 \
+  MAX_USER_TURNS=10 \
+  AGENT_MAX_TOKENS=2500 \
+  USE_SYNTACTIC_VERIFIER=false \
+  USE_WORKING_MEMORY=false \
+  USE_QUOTE_CLIPBOARD=false \
+  USE_LEAD_CLIPBOARD=false \
+  ROUTING_MODE=none \
+  SCAFFOLD_MODE=none \
+  SKIP_HEALTH_CHECKS=true \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RESULT_RUN_TAG"' \
+  LOG_TAG='"$LOG_NAME"' \
+  ./run_tasks_crmarena_pro_external_full.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Node: $(hostname)"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+### Claude CLI Opus + OpenRouter GPT-4o User/Judge, Full External/Confidentiality Benchmark
+
+Runs all examples for:
+
+- `original/knowledge_qa`
+- `original/named_entity_disambiguation`
+- `b2b/private_customer_information`
+- `b2b/internal_operation_data`
+- `b2b/confidential_company_knowledge`
+
+This is the prompt-only privacy-aware raw ReAct baseline for Claude CLI. It uses `AGENT_STRATEGY=react`, no symbolic DSL, no verifier, no working memory, and `PRIVACY_AWARE_PROMPT=true`.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RESULT_RUN_TAG="claude_cli_opus_openrouter_gpt4o_external_conf_full_20260802_2346"
+RUN_NAME="${RESULT_RUN_TAG}_resume_$(date +%Y%m%d_%H%M)"
+LOG_NAME="$RUN_NAME"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+  MODEL_CONFIG_FILE=/dev/null \
+  QWEN_MODEL=default \
+  QWEN_BASE_URL= \
+  AGENT_PROVIDER=claude_cli \
+  CLAUDE_CLI_MODEL="${CLAUDE_CLI_MODEL:-claude-opus-5}" \
+  AGENT_REASONING_MODE=default \
+  AGENT_STRATEGY=react \
+  JUDGE_PROVIDER=openrouter \
+  USER_PROVIDER=openrouter \
+  JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+  USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+  REGULAR_EXTERNAL_TASKS_CSV=knowledge_qa,named_entity_disambiguation \
+  CONFIDENTIALITY_TASKS_CSV=private_customer_information,internal_operation_data,confidential_company_knowledge \
+  MAX_TASKS_PER_CATEGORY=0 \
+  INTERACTIVE=true \
+  PRIVACY_AWARE_PROMPT=true \
+  MAX_TURNS=20 \
+  MAX_USER_TURNS=10 \
+  AGENT_MAX_TOKENS=2500 \
+  USE_SYNTACTIC_VERIFIER=false \
+  USE_WORKING_MEMORY=false \
+  USE_QUOTE_CLIPBOARD=false \
+  USE_LEAD_CLIPBOARD=false \
+  ROUTING_MODE=none \
+  SCAFFOLD_MODE=none \
+  SKIP_HEALTH_CHECKS=true \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RESULT_RUN_TAG"' \
+  LOG_TAG='"$LOG_NAME"' \
+  ./run_tasks_crmarena_pro_external_full.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Node: $(hostname)"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+### CLI Baseline Customization Notes
+
+Model/account config:
+
+```bash
+# Preferred place to change CLI auth/model defaults:
+nano /work/hdd/bgtb/acheng11/.model-configs.txt
+
+# Typical entries:
+CODEX_HOME=/work/hdd/bgtb/acheng11/.codex-bench
+CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench
+CODEX_CLI_MODEL=default
+CLAUDE_CLI_MODEL=sonnet
+AGENT_REASONING_MODE=default
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_DEFAULT_MODEL=openai/gpt-4o-2024-11-20
+```
+
+Switch Codex CLI to Claude CLI:
+
+```bash
+AGENT_PROVIDER=claude_cli
+QWEN_MODEL=default
+```
+
+Set OpenRouter user/judge explicitly to the paper-aligned GPT-4o model:
+
+```bash
+JUDGE_PROVIDER=openrouter \
+JUDGE_MODEL=openai/gpt-4o-2024-11-20 \
+USER_PROVIDER=openrouter \
+USER_MODEL=openai/gpt-4o-2024-11-20
+```
+
+Run the symbolic/general runtime instead of raw ReAct:
+
+```bash
+AGENT_STRATEGY=general_dsl
+```
+
+For raw frontier-agent baselines, keep `AGENT_STRATEGY=react`. That is closest to the benchmark's normal agent setup: the model sees the CRMArena Salesforce prompt/schema and must emit `Thought` plus `<execute>` or `<respond>` actions. The CLI adapter itself is stateless across calls, but CRMArena still passes the benchmark-visible conversation history within a task.
+
+External interactive runs now default to `PRIVACY_AWARE_PROMPT=true`, which enables the repo's privacy-aware external interactive system prompt for raw ReAct baselines. Set `PRIVACY_AWARE_PROMPT=false` for a non-privacy-prompt ablation.
+
+Each result JSON item includes top-level `time_to_resolution_seconds`, `task_wall_time_seconds`, `model_calls`, `env_steps`, `usage`, `total_cost`, and aggregate token totals when the model client reports them. CLI providers currently expose estimated token counts and `cost=null`; OpenRouter/LiteLLM may provide real usage and cost depending on provider response metadata.
+
+Reasoning/thinking comparability:
+
+- `AGENT_REASONING_MODE=default` is the intended baseline: the adapter passes no reasoning/effort override and lets the provider/model use its normal default.
+- Codex CLI runs through `codex exec --ephemeral`; with `CODEX_CLI_MODEL=default`, the adapter does not pass `--model` and lets the authenticated Codex account choose its default supported model.
+- Claude CLI runs through `claude --print --no-session-persistence`; the adapter does not pass `--effort` when `AGENT_REASONING_MODE=default`.
+- For Claude-only ablations, set `AGENT_REASONING_MODE=low`, `medium`, `high`, `xhigh`, or `max`; the adapter maps that to `claude --effort`.
+- The CRMArena harness does not receive hidden reasoning separately. It only parses the visible final CLI output.
+- `openai/gpt-4o-2024-11-20` is the default OpenRouter user/judge model for benchmark-like runs. `nvidia/nemotron-3-ultra-550b-a55b:free` is only for plumbing smoke tests. `openrouter/free` randomly routes across free providers and can fail when one upstream provider is unhealthy.
+- OpenRouter free providers can return transient capacity errors such as `ResourceExhausted`. The harness retries OpenRouter calls by default with `OPENROUTER_RETRY_ATTEMPTS=4` and `OPENROUTER_RETRY_BASE_SLEEP_SECONDS=8`; override those for faster failure or longer waits.
+
+Scale knobs:
+
+```bash
+# 1 each, smoke:
+MAX_TASKS_PER_CATEGORY=1
+
+# 25 each, small benchmark:
+MAX_TASKS_PER_CATEGORY=25
+
+# full task categories:
+MAX_TASKS_PER_CATEGORY=0
+```
+
+Stopping jobs:
+
+- Run the stop command from the same node where the wrapper started. Linux PIDs are node-local.
+- If the wrapper was launched inside a Slurm allocation, SSH back to that compute node or cancel the Slurm job/step.
+- The `setsid` wrapper makes `PGID` equal to a real process group, so `kill -TERM -${WRAPPER_PGID}` stops the wrapper plus child Python/Codex/Claude processes.
+
+## Claude CLI General DSL Smoke Test
+
+This runs Claude through the shared `general_dsl` symbolic runtime, not raw
+ReAct. It uses Claude's configured/default CLI model and default reasoning
+behavior:
+
+- `CLAUDE_CLI_MODEL=default` means the adapter does not pass `--model`.
+- `AGENT_REASONING_MODE=default` means the adapter does not pass `--effort`.
+
+The task order is:
+
+1. `b2b/private_customer_information`
+2. `b2b/internal_operation_data`
+3. `b2b/confidential_company_knowledge`
+4. `original/knowledge_qa`
+5. `original/named_entity_disambiguation`
+
+Change `MAX_TASKS_PER_CATEGORY=8` to `0` for the full benchmark.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+MAX_TASKS_PER_CATEGORY=8
+RESULT_RUN_TAG="claude_cli_general_dsl_external_conf_${MAX_TASKS_PER_CATEGORY}each_$(date +%Y%m%d_%H%M)"
+RUN_NAME="$RESULT_RUN_TAG"
+LOG_NAME="$RUN_NAME"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+
+  run_general_dsl_task() {
+    local org_type="$1"
+    local task_name="$2"
+    echo "============================================================"
+    echo "Claude general_dsl: org=${org_type} task=${task_name}"
+    echo "============================================================"
+    MODEL_CONFIG_FILE=/dev/null \
+    AGENT_MODEL=claude_cli \
+    AGENT_PROVIDER=claude_cli \
+    AGENT_BASE_URL= \
+    AGENT_API_KEY=dummy \
+    CLAUDE_CLI_MODEL="${CLAUDE_CLI_MODEL:-default}" \
+    AGENT_REASONING_MODE=default \
+    AGENT_STRATEGY=general_dsl \
+    JUDGE_PROVIDER=openrouter \
+    USER_PROVIDER=openrouter \
+    JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+    USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+    TASKS_CSV="${task_name}" \
+    ORG_TYPES_CSV="${org_type}" \
+    MAX_TASKS_PER_CATEGORY='"$MAX_TASKS_PER_CATEGORY"' \
+    INTERACTIVE=true \
+    PRIVACY_AWARE_PROMPT=true \
+    MAX_TURNS=20 \
+    MAX_USER_TURNS=10 \
+    AGENT_MAX_TOKENS=2500 \
+    USE_EXTERNAL_ROUTER_DSL=true \
+    USE_SYNTACTIC_VERIFIER=false \
+    USE_WORKING_MEMORY=false \
+    USE_QUOTE_CLIPBOARD=false \
+    USE_LEAD_CLIPBOARD=false \
+    ROUTING_MODE=none \
+    SCAFFOLD_MODE=none \
+    SKIP_HEALTH_CHECKS=true \
+    CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+    PYTHON_BIN="$(command -v python)" \
+    RUN_TAG='"$RESULT_RUN_TAG"' \
+    LOG_TAG='"$LOG_NAME"' \
+    ./run_tasks_crmarena_pro.sh
+  }
+
+  run_general_dsl_task b2b private_customer_information
+  run_general_dsl_task b2b internal_operation_data
+  run_general_dsl_task b2b confidential_company_knowledge
+  run_general_dsl_task original knowledge_qa
+  run_general_dsl_task original named_entity_disambiguation
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Node: $(hostname)"
+echo "Log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+## Slurm Claude General DSL Benchmark
+
+This submits a Slurm job that runs Claude CLI through the shared
+`general_dsl` runtime in this order:
+
+1. `b2b/internal_operation_data`
+2. `b2b/private_customer_information`
+3. `original/named_entity_disambiguation`
+4. `original/knowledge_qa`
+5. `b2b/confidential_company_knowledge`
+
+Outputs are written under:
+
+```bash
+/work/hdd/bgtb/acheng11/CRMArena/results/claude-bench-results/<tag>
+/work/hdd/bgtb/acheng11/CRMArena/logs/claude-bench-results/<tag>
+```
+
+Default 2-task smoke test:
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/claude-bench-results/slurm
+
+sbatch -A bgtb-dtai-gh \
+  scripts/deltaai_claude_general_dsl_benchmark.sbatch
+```
+
+2-task smoke test with an explicit tag:
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/claude-bench-results/slurm
+
+sbatch -A bgtb-dtai-gh \
+  scripts/deltaai_claude_general_dsl_benchmark.sbatch \
+  smoke claude_general_dsl_smoke_v1
+```
+
+Full benchmark with an explicit tag:
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/claude-bench-results/slurm
+
+sbatch -A bgtb-dtai-gh \
+  scripts/deltaai_claude_general_dsl_benchmark.sbatch \
+  full claude_general_dsl_full_v1
+```
+
+You can also override knobs inline:
+
+```bash
+MAX_TASKS_PER_CATEGORY=25 \
+CLAUDE_CLI_MODEL=default \
+AGENT_REASONING_MODE=default \
+sbatch -A bgtb-dtai-gh \
+  scripts/deltaai_claude_general_dsl_benchmark.sbatch \
+  smoke claude_general_dsl_25each_v1
+```
+
+The script sources `/work/hdd/bgtb/acheng11/.model-configs.txt` for
+`CLAUDE_CONFIG_DIR` and `OPENROUTER_API_KEY`. By default it uses
+`openai/gpt-4o-2024-11-20` through OpenRouter for both the simulated user and
+judge, matching the benchmark-style evaluator setup we have been using.
+
+
+
+```
+cd /work/hdd/bgtb/acheng11/CRMArena
+
+RESUME_TAG="claude_general_dsl_full_v1_resume_kqa_cck_$(date +%Y%m%d_%H%M)"
+
+sbatch --export=ALL,\
+BENCH_MODE=full,\
+MAX_TASKS_PER_CATEGORY=0,\
+RUN_TAG="$RESUME_TAG",\
+RESULT_ROOT=/work/hdd/bgtb/acheng11/CRMArena/results/claude-bench-results/claude_general_dsl_full_v1,\
+LOG_ROOT=/work/hdd/bgtb/acheng11/CRMArena/logs/claude-bench-results/$RESUME_TAG \
+scripts/deltaai_claude_general_dsl_benchmark.sbatch full "$RESUME_TAG"
+
+```
+
+
+cd /work/hdd/bgtb/acheng11/CRMArena
+
+module purge >/dev/null 2>&1 || true
+module load gcc-native
+module load cudatoolkit/25.5_12.9
+module load python/miniforge3_pytorch/2.10.0
+source .venv-crm-modern/bin/activate
+
+RUN_TAG="claude_internal_full_$(date +%Y%m%d_%H%M)"
+
+TASKS_CSV=wrong_stage_rectification \
+ROUTING_MODE=none \
+SCAFFOLD_MODE=none \
+ORG_TYPES_CSV=b2b \
+AGENT_STRATEGY=general_dsl \
+AGENT_MODEL=claude_cli \
+AGENT_PROVIDER=claude_cli \
+CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench \
+CLAUDE_CLI_MODEL=default \
+JUDGE_PROVIDER=openrouter \
+USER_PROVIDER=openrouter \
+JUDGE_MODEL=openai/gpt-4o-2024-11-20 \
+USER_MODEL=openai/gpt-4o-2024-11-20 \
+MAX_TASKS_PER_CATEGORY=0 \
+MAX_JOBS=1 \
+RUN_TAG="$RUN_TAG" \
+LOG_TAG="$RUN_TAG" \
+CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+PYTHON_BIN="$(command -v python)" \
+./run_tasks_crmarena_pro.sh
+
+
+
+
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RESULT_RUN_TAG="claude_internal_full_20260805_2240"
+LOG_TAG="${RESULT_RUN_TAG}_resume_$(date +%Y%m%d_%H%M)"
+WRAPPER_LOG="logs/run_wrappers/${LOG_TAG}.log"
+
+nohup bash -lc '
+cd /work/hdd/bgtb/acheng11/CRMArena
+module purge >/dev/null 2>&1 || true
+module load gcc-native
+module load cudatoolkit/25.5_12.9
+module load python/miniforge3_pytorch/2.10.0
+source .venv-crm-modern/bin/activate
+
+TASKS_CSV=wrong_stage_rectification \
+ROUTING_MODE=none \
+SCAFFOLD_MODE=none \
+ORG_TYPES_CSV=b2b \
+AGENT_STRATEGY=general_dsl \
+AGENT_MODEL=claude_cli \
+AGENT_PROVIDER=claude_cli \
+CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench \
+CLAUDE_CLI_MODEL=default \
+JUDGE_PROVIDER=openrouter \
+USER_PROVIDER=openrouter \
+JUDGE_MODEL=openai/gpt-4o-2024-11-20 \
+USER_MODEL=openai/gpt-4o-2024-11-20 \
+MAX_TASKS_PER_CATEGORY=0 \
+MAX_JOBS=1 \
+RUN_TAG="'"$RESULT_RUN_TAG"'" \
+LOG_TAG="'"$LOG_TAG"'" \
+CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+PYTHON_BIN="$(command -v python)" \
+./run_tasks_crmarena_pro.sh
+' > "$WRAPPER_LOG" 2>&1 < /dev/null &
+
+echo "Wrapper PID: $!"
+echo "Result folder: /work/hdd/bgtb/acheng11/CRMArena/results/b2b_multi-turn/general_dsl_claude_cli_${RESULT_RUN_TAG}_noverifier_nowm"
+echo "New task log: /work/hdd/bgtb/acheng11/CRMArena/logs/b2b_multi-turn/general_dsl_claude_cli_${LOG_TAG}_noverifier_nowm/
+run_wrong_stage_rectification_default.log"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/${WRAPPER_LOG}"
+```
+
+### Claude CLI Opus ReAct Baseline, Full Policy Violation Identification Benchmark
+
+Run this from a login node. This is the corrected raw Claude ReAct baseline for
+`policy_violation_identification`; it does not run `sales_cycle_understanding`,
+does not use the symbolic runtime, and does not require a local vLLM server.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RESULT_RUN_TAG="claude_cli_opus_react_pvi_full_$(date +%Y%m%d_%H%M)"
+RUN_NAME="$RESULT_RUN_TAG"
+LOG_NAME="$RUN_NAME"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+
+  MODEL_CONFIG_FILE=/dev/null \
+  AGENT_MODEL=claude_cli \
+  AGENT_PROVIDER=claude_cli \
+  CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench \
+  CLAUDE_CLI_MODEL="${CLAUDE_CLI_MODEL:-claude-opus-5}" \
+  AGENT_REASONING_MODE=default \
+  AGENT_STRATEGY=react \
+  TASKS_CSV=policy_violation_identification \
+  ORG_TYPES_CSV=b2b \
+  JUDGE_PROVIDER=openrouter \
+  USER_PROVIDER=openrouter \
+  JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-4o-2024-11-20}" \
+  USER_MODEL="${USER_MODEL:-openai/gpt-4o-2024-11-20}" \
+  MAX_TASKS_PER_CATEGORY=0 \
+  INTERACTIVE=true \
+  PRIVACY_AWARE_PROMPT=false \
+  MAX_TURNS=20 \
+  MAX_USER_TURNS=10 \
+  AGENT_MAX_TOKENS=2500 \
+  USE_SYNTACTIC_VERIFIER=false \
+  USE_WORKING_MEMORY=false \
+  USE_QUOTE_CLIPBOARD=false \
+  USE_LEAD_CLIPBOARD=false \
+  ROUTING_MODE=none \
+  SCAFFOLD_MODE=none \
+  SKIP_HEALTH_CHECKS=true \
+  CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern \
+  PYTHON_BIN="$(command -v python)" \
+  RUN_TAG='"$RESULT_RUN_TAG"' \
+  LOG_TAG='"$LOG_NAME"' \
+  ./run_tasks_crmarena_pro.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Node: $(hostname)"
+echo "Result folder: /work/hdd/bgtb/acheng11/CRMArena/results/b2b_multi-turn/react_claude_cli_${RESULT_RUN_TAG}_noverifier_nowm"
+echo "Task log: /work/hdd/bgtb/acheng11/CRMArena/logs/b2b_multi-turn/react_claude_cli_${LOG_NAME}_noverifier_nowm/run_policy_violation_identification_default.log"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+### Rerun API/CLI Stub Rows Into an Existing Result Folder
+
+Use this when a finished benchmark has a small number of provider/quota/API
+stub rows. It removes and reruns only the requested task IDs, writes the new
+rows back into the original result JSON, and writes fresh logs under a new
+`LOG_TAG`.
+
+Current useful presets:
+
+- `kqa_react_api_stubs`: Claude ReAct KQA task `80`.
+- `pvi_react_api_stubs`: Claude ReAct PVI tasks `1427,1428,1429`.
+- `pvi_dsl_api_stubs`: Claude General DSL PVI tasks `1399,1403`.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+PRESET="pvi_dsl_api_stubs"
+
+RUN_NAME="rerun_${PRESET}_$(date +%Y%m%d_%H%M)"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  PRESET="'"$PRESET"'" scripts/rerun_missing_wsr_react_direct.sh
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+To rerun a different current exclusion, only change `PRESET`:
+
+```bash
+PRESET="kqa_react_api_stubs"
+PRESET="pvi_dsl_api_stubs"
+```
+
+For a future custom exclusion, call the same script with explicit fields. Do
+not copy this block as-is; replace every placeholder first:
+
+```bash
+# TASKS_CSV=<task_family> \
+# TASK_IDS_CSV=<comma_separated_task_ids> \
+# RUN_TAG=<existing_result_run_tag> \
+# ORG_TYPES_CSV=<b2b_or_original> \
+# AGENT_STRATEGY=<react_or_general_dsl> \
+# AGENT_MODEL=<agent_model_name> \
+# scripts/rerun_missing_wsr_react_direct.sh
 ```

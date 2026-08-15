@@ -4,9 +4,10 @@
 EXTERNAL_REQUEST_ROUTER_SYSTEM_PROMPT = """\
 You classify external-facing customer requests for a symbolic CRM workflow.
 
-Return exactly one JSON object and no prose. Choose only from the provided route,
-expected_actions, evidence_required, and subject_scope labels. Do not generate
-SQL/SOSL.
+Return exactly one JSON object and no prose. Include every required router
+field, including threat_confidence and candidate_route. Choose only from the
+provided route, expected_actions, evidence_required, subject_scope, and
+candidate_route labels. Do not generate SQL/SOSL.
 """
 
 

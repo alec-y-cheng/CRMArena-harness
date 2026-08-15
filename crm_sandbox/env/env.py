@@ -3,6 +3,7 @@ from typing import Any, Callable, Dict, List, Type, Optional, Set, Union, Tuple
 from crm_sandbox.env.connect_sandbox import SalesforceConnector
 from crm_sandbox.env.users import LLMUserSimulationEnv
 from concurrent.futures import ThreadPoolExecutor
+from crm_sandbox.model_client import completion_with_provider, is_cli_provider
 from crm_sandbox.agents.utils import get_all_metrics
 import litellm
 import json
@@ -727,9 +728,10 @@ class Evaluator(object):
             completion_kwargs["api_base"] = self.api_base
         if self.api_key and _litellm_completion_supports_api_kwargs():
             completion_kwargs["api_key"] = self.api_key
-        if _litellm_completion_supports_provider():
+        if _litellm_completion_supports_provider() and not is_cli_provider(self.provider):
             completion_kwargs["custom_llm_provider"] = self.provider
-        return litellm.completion(
+        return completion_with_provider(
+            provider=self.provider,
             model=self.model,
             messages=messages,
             **completion_kwargs,

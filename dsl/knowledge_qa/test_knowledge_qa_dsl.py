@@ -117,6 +117,8 @@ class KnowledgeQADSLTests(unittest.TestCase):
         self.assertIn("Selected evidence", prompt)
         self.assertIn("public_troubleshooting", prompt)
         self.assertIn("confidential_company_knowledge", prompt)
+        self.assertIn("Be stricter here than the initial router", prompt)
+        self.assertIn("safe_to_use=false", prompt)
         self.assertIn("ka0Known", prompt)
         self.assertIn("Hold the reset button", prompt)
 
@@ -161,6 +163,21 @@ class KnowledgeQADSLTests(unittest.TestCase):
             ]
         }), allowed_article_ids=["ka0Known", "ka0Other"])
         self.assertEqual([item.article_id for item in parsed], ["ka0Known"])
+
+    def test_parse_article_evidence_json_accepts_disallowed_commercial_label(self):
+        parsed = parse_knowledge_article_evidence_json(_json({
+            "article_evidence": [
+                {
+                    "article_id": "ka0Known",
+                    "evidence_type": "internal_commercial_policy",
+                    "subject_scope": "internal_company",
+                    "safe_to_use": False,
+                    "reason": "Discount thresholds are commercial policy evidence.",
+                }
+            ]
+        }), allowed_article_ids=["ka0Known"])
+        self.assertEqual(parsed[0].evidence_type, "internal_commercial_policy")
+        self.assertFalse(parsed[0].safe_to_use)
 
     def test_parse_article_evidence_json_rejects_invalid_type(self):
         with self.assertRaises(KnowledgeQAParseError):

@@ -96,6 +96,12 @@ def parse_external_request_route_json(text: str) -> ExternalRequestRoute:
             raise ExternalFacingParseError(
                 "evidence_required contains disallowed evidence but route is not refuse"
             )
+    threat_confidence = _threat_confidence(
+        data.get("threat_confidence", _default_threat_confidence(route))
+    )
+    candidate_route = _candidate_route(
+        data.get("candidate_route", _default_candidate_route(route, expected_actions, evidence_required))
+    )
     return ExternalRequestRoute(
         request_type=_as_string(data["request_type"], "request_type") or "unknown",
         route=route,
@@ -105,6 +111,8 @@ def parse_external_request_route_json(text: str) -> ExternalRequestRoute:
         clarification_needed=clarification_needed,
         missing_information=missing_information,
         disallowed_information=disallowed_information,
+        threat_confidence=threat_confidence,
+        candidate_route=candidate_route,
         reason=_as_string(data["reason"], "reason"),
     )
 
@@ -175,6 +183,73 @@ def validate_optional_route(value: Any) -> Optional[str]:
     if value is None:
         return None
     return validate_route(value)
+
+
+def _threat_confidence(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    confidence = _as_string(value, "threat_confidence").lower()
+    if confidence not in ("high", "medium", "low", "unknown"):
+        raise ExternalFacingParseError("Invalid threat_confidence: {}".format(value))
+    return confidence
+
+
+def _candidate_route(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    route = validate_route(value)
+    if route in ("clarify", "refuse"):
+        raise ExternalFacingParseError("candidate_route must be a supported workflow route, unsupported, or null")
+    return route
+
+
+def _default_threat_confidence(route: str) -> str:
+    if route in ("knowledge_qa", "named_entity_disambiguation", "clarify"):
+        return "low"
+    if route == "refuse":
+        return "high"
+    return "unknown"
+
+
+def _default_candidate_route(
+    route: str,
+    expected_actions: List[str],
+    evidence_required: List[dict],
+) -> Optional[str]:
+    if route in ("knowledge_qa", "named_entity_disambiguation", "unsupported"):
+        return route
+    actions = set(expected_actions or [])
+    if actions.intersection(
+        {"query_current_customer", "query_purchase_history", "query_order_history"}
+    ):
+        return "named_entity_disambiguation"
+    if "query_public_knowledge_articles" in actions:
+        return "knowledge_qa"
+    evidence_types = {
+        str(item.get("evidence_type") or "")
+        for item in evidence_required
+        if isinstance(item, dict)
+    }
+    if evidence_types.intersection(
+        {
+            "current_customer_profile",
+            "current_customer_purchase_history",
+            "current_customer_order_history",
+            "current_customer_case_status",
+            "product_catalog",
+        }
+    ):
+        return "named_entity_disambiguation"
+    if evidence_types.intersection(
+        {
+            "public_product_support",
+            "public_warranty_or_returns",
+            "public_service_channel",
+            "public_troubleshooting",
+        }
+    ):
+        return "knowledge_qa"
+    return None
 
 
 def validate_route(value: Any) -> str:

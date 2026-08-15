@@ -1,11 +1,11 @@
 import os
-from litellm import completion
 import litellm
 litellm.set_verbose = False
 from typing import Dict, List, Optional
 import time, traceback
 from crm_sandbox.agents.prompts import SCHEMA_STRING, REACT_RULE_STRING, ACT_RULE_STRING, SYSTEM_METADATA, REACT_EXTERNAL_INTERACTIVE_PROMPT, REACT_INTERNAL_INTERACTIVE_PROMPT, REACT_INTERNAL_PROMPT, REACT_EXTERNAL_PROMPT, REACT_PRIVACY_AWARE_EXTERNAL_PROMPT, REACT_PRIVACY_AWARE_EXTERNAL_INTERACTIVE_PROMPT, ACT_PROMPT
 from crm_sandbox.agents.clipboards import LeadQualificationClipboard, QuoteApprovalClipboard
+from crm_sandbox.model_client import completion_with_provider, is_cli_provider
 from crm_sandbox.agents.utils import parse_wrapped_response, BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP
 from crm_sandbox.agents.working_memory import WorkingMemory
 from verifiers import ActionVerifier
@@ -74,6 +74,7 @@ class ChatAgent:
         self.max_turns = max_turns
         self.strategy = strategy
         self.info = {}
+        self.messages = []
         self.usage = {"cost": [], "completion_tokens": [], "prompt_tokens": [], "total_tokens": []}
         self.provider = provider
         self.use_syntactic_verifier = use_syntactic_verifier
@@ -437,7 +438,7 @@ class ChatAgent:
 
     def _call_model(self, messages):
         # sleep for non-openai models
-        if self.provider != "openai":
+        if self.provider != "openai" and not is_cli_provider(self.provider):
             time.sleep(5)
         # turn off thinking for gemini 2.5 flash
         if self.original_model_name == "gemini-2.5-flash-preview-04-17":
@@ -447,7 +448,8 @@ class ChatAgent:
         else:
             thinking = None
 
-        res = completion(
+        res = completion_with_provider(
+            provider=self.provider,
             messages=messages,
             model=self.model,
             temperature=0.0,

@@ -46,6 +46,8 @@ class ToolCallAgent:
         self.model = model
         self.eval_mode = eval_mode
         self.max_turns = max_turns
+        self.info = {}
+        self.messages = []
         self.usage = {"cost": [], "completion_tokens": [], "prompt_tokens": [], "total_tokens": []}
         self.provider = provider
         if provider == "bedrock" and self.model in BEDROCK_MODELS_MAP:

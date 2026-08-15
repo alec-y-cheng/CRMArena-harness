@@ -1,0 +1,117 @@
+{
+  "allowed_action_categories": {
+    "environment": [
+      "get_record_by_id",
+      "query_children",
+      "retrieve_knowledge",
+      "query_product_catalog"
+    ],
+    "symbolic": [
+      "extract_claims",
+      "compare_values",
+      "compute_totals"
+    ],
+    "termination": [
+      "render_answer",
+      "return_none",
+      "pause_for_clarification",
+      "stop"
+    ]
+  },
+  "answer_contract": {
+    "allowed_values": [
+      "Budget",
+      "Authority",
+      "Need",
+      "Timeline",
+      "None"
+    ],
+    "type": "failed_claims_or_none"
+  },
+  "completion": {
+    "any_of": [
+      "answer_contract_satisfied",
+      "refusal_required",
+      "clarification_paused",
+      "max_turns_reached"
+    ]
+  },
+  "org_scope": "b2b",
+  "phases": {
+    "acquire_evidence_or_clarify": {
+      "clarification_transition": "pause_for_clarification",
+      "selection_mode": "llm_from_enabled_actions"
+    },
+    "extract_or_update_claims": {
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "frame_instance": {
+      "output_schema": "InstanceFrame",
+      "prompt_template": "generic_instance_frame"
+    },
+    "render_or_refuse_or_stop": {
+      "selection_mode": "deterministic"
+    },
+    "verify_state_and_privacy_gates": {
+      "required_checkpoints": [
+        "schema_validated",
+        "action_verified",
+        "evidence_privacy_gate",
+        "answer_contract_gate"
+      ],
+      "selection_mode": "deterministic"
+    }
+  },
+  "request_scope": "internal_user",
+  "requirements": [
+    {
+      "name": "Budget",
+      "required_evidence_types": [
+        "current_customer_profile",
+        "product_catalog",
+        "internal_commercial_policy"
+      ],
+      "source_objects": [
+        "Lead",
+        "VoiceCallTranscript__c",
+        "Product2",
+        "PricebookEntry"
+      ]
+    },
+    {
+      "name": "Authority",
+      "required_evidence_types": [
+        "current_customer_profile"
+      ],
+      "source_objects": [
+        "Lead",
+        "VoiceCallTranscript__c"
+      ]
+    },
+    {
+      "name": "Need",
+      "required_evidence_types": [
+        "current_customer_profile",
+        "public_product_support"
+      ],
+      "source_objects": [
+        "Lead",
+        "VoiceCallTranscript__c"
+      ]
+    },
+    {
+      "name": "Timeline",
+      "required_evidence_types": [
+        "current_customer_profile",
+        "internal_commercial_policy"
+      ],
+      "source_objects": [
+        "Lead",
+        "VoiceCallTranscript__c",
+        "Knowledge__kav"
+      ]
+    }
+  ],
+  "task_family": "lead_qualification",
+  "workflow_id": "lead_qualification"
+}

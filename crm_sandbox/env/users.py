@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any, Union
 from litellm import completion
 import inspect
+from crm_sandbox.model_client import completion_with_provider, is_cli_provider
 
 
 def _completion_accepts_kwargs() -> bool:
@@ -39,9 +40,10 @@ class LLMUserSimulationEnv(object):
             completion_kwargs["api_base"] = self.api_base
         if self.api_key and _completion_supports_api_kwargs():
             completion_kwargs["api_key"] = self.api_key
-        if _completion_supports_provider():
+        if _completion_supports_provider() and not is_cli_provider(self.provider):
             completion_kwargs["custom_llm_provider"] = self.provider
-        res = completion(
+        res = completion_with_provider(
+            provider=self.provider,
             model=self.model,
             messages=messages,
             **completion_kwargs,

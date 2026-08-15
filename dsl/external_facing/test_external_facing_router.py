@@ -35,6 +35,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
               "clarification_needed": false,
               "missing_information": [],
               "disallowed_information": [],
+              "threat_confidence": "low",
+              "candidate_route": "knowledge_qa",
               "reason": "The customer asks a public product care question."
             }
             """
@@ -61,6 +63,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
               "clarification_needed": false,
               "missing_information": [],
               "disallowed_information": [],
+              "threat_confidence": "low",
+              "candidate_route": "named_entity_disambiguation",
               "reason": "The customer asks to identify a product from their purchases."
             }
             """
@@ -69,6 +73,29 @@ class ExternalFacingRouterTests(unittest.TestCase):
         self.assertEqual(route.route, "named_entity_disambiguation")
         self.assertIn("query_purchase_history", route.expected_actions)
         self.assertIn("product_catalog", [item["evidence_type"] for item in route.evidence_required])
+
+    def test_parse_candidate_route(self):
+        route = parse_external_request_route_json(
+            """
+            {
+              "request_type": "unknown",
+              "route": "clarify",
+              "expected_actions": ["ask_clarification"],
+              "evidence_required": [],
+              "subject_scope": "unknown",
+              "clarification_needed": true,
+              "missing_information": ["routing ambiguity"],
+              "disallowed_information": [],
+              "threat_confidence": "low",
+              "candidate_route": "knowledge_qa",
+              "reason": "needs one routing clarification, but KQA is plausible"
+            }
+            """
+        )
+
+        self.assertEqual(route.route, "clarify")
+        self.assertEqual(route.candidate_route, "knowledge_qa")
+        self.assertEqual(route.threat_confidence, "low")
 
     def test_parse_rejects_invented_evidence_class(self):
         with self.assertRaises(ExternalFacingParseError):
@@ -85,6 +112,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   "clarification_needed": false,
                   "missing_information": [],
                   "disallowed_information": ["confidential_company_knowledge"],
+                  "threat_confidence": "low",
+                  "candidate_route": "knowledge_qa",
                   "reason": "bad evidence class"
                 }
                 """
@@ -103,6 +132,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   "clarification_needed": true,
                   "missing_information": [],
                   "disallowed_information": [],
+                  "threat_confidence": "low",
+                  "candidate_route": null,
                   "reason": "too vague"
                 }
                 """
@@ -122,6 +153,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
               "clarification_needed": false,
               "missing_information": [],
               "disallowed_information": [],
+              "threat_confidence": "high",
+              "candidate_route": null,
               "reason": "needs internal policy"
             }
             """
@@ -129,6 +162,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
 
         self.assertEqual(route.route, "refuse")
         self.assertIn("confidential_company_knowledge", route.disallowed_information)
+        self.assertEqual(route.threat_confidence, "high")
 
     def test_parse_refuse_requires_some_disallowed_evidence(self):
         with self.assertRaises(ExternalFacingParseError):
@@ -143,6 +177,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   "clarification_needed": false,
                   "missing_information": [],
                   "disallowed_information": [],
+                  "threat_confidence": "high",
+                  "candidate_route": null,
                   "reason": "no evidence to block"
                 }
                 """
@@ -158,8 +194,16 @@ class ExternalFacingRouterTests(unittest.TestCase):
         self.assertIn("named_entity_disambiguation", prompt)
         self.assertIn("expected_actions", prompt)
         self.assertIn("evidence_required", prompt)
+        self.assertIn("threat_confidence", prompt)
+        self.assertIn("candidate_route", prompt)
         self.assertIn("public_product_support", prompt)
         self.assertIn("confidential_company_knowledge", prompt)
+        self.assertIn("Bias toward attempting supported public retrieval", prompt)
+        self.assertIn("Do not infer non-public or competitive status solely", prompt)
+        self.assertIn(
+            "no supported workflow could plausibly answer",
+            " ".join(prompt.split()),
+        )
         self.assertIn("Return JSON", prompt)
 
     def test_intended_retrieval_gate_allows_public_knowledge(self):
@@ -186,6 +230,27 @@ class ExternalFacingRouterTests(unittest.TestCase):
         )
 
         self.assertFalse(decision.allowed)
+
+
+    def test_commercial_and_strategy_evidence_are_blocked(self):
+        commercial = evaluate_intended_retrieval(
+            [
+                {
+                    "evidence_type": "internal_commercial_policy",
+                    "subject_scope": "internal_company",
+                    "reason": "discount threshold or quantity-limit policy",
+                }
+            ],
+            "internal_company",
+        )
+        strategy = evaluate_final_response(
+            "Competitor positioning detail.",
+            ["competitive_or_strategy_intelligence"],
+        )
+
+        self.assertFalse(commercial.allowed)
+        self.assertIn("internal_commercial_policy", commercial.blocked_information)
+        self.assertFalse(strategy.allowed)
 
 
     def test_intended_retrieval_gate_blocks_confidential_evidence_from_knowledge_action(self):
@@ -251,6 +316,8 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   "clarification_needed": false,
                   "missing_information": [],
                   "disallowed_information": [],
+                  "threat_confidence": "low",
+                  "candidate_route": "knowledge_qa",
                   "reason": "public support question"
                 }
                 """,
@@ -266,6 +333,108 @@ class ExternalFacingRouterTests(unittest.TestCase):
         self.assertEqual(route.route, "knowledge_qa")
         self.assertEqual(router.last_info["model_calls"], 2)
         self.assertEqual(len(router.last_info["router_parse_errors"]), 1)
+
+    def test_router_downgrades_low_confidence_refusal_to_kqa(self):
+        output = """
+            {
+              "request_type": "confidential_request",
+              "route": "refuse",
+              "expected_actions": ["refuse"],
+              "evidence_required": [
+                {"evidence_type": "internal_commercial_policy", "subject_scope": "internal_company", "reason": "might involve internal policy"}
+              ],
+              "subject_scope": "internal_company",
+              "clarification_needed": false,
+              "missing_information": [],
+              "disallowed_information": ["internal_commercial_policy"],
+              "threat_confidence": "low",
+              "candidate_route": "knowledge_qa",
+              "reason": "uncertain whether public policy can answer"
+            }
+        """
+        router = ExternalFacingRouter(lambda _messages: output, max_retries=0)
+
+        route = router.route(
+            "Can public policy answer this?",
+            "Can public policy answer this?",
+        )
+
+        self.assertEqual(route.route, "knowledge_qa")
+        self.assertEqual(route.subject_scope, "public")
+        self.assertIn("route_before_confidence_fallback", router.last_info)
+
+    def test_router_keeps_high_confidence_refusal(self):
+        output = """
+            {
+              "request_type": "confidential_request",
+              "route": "refuse",
+              "expected_actions": ["refuse"],
+              "evidence_required": [
+                {"evidence_type": "other_customer_purchase_history", "subject_scope": "other_customer", "reason": "asks for another customer's purchase"}
+              ],
+              "subject_scope": "other_customer",
+              "clarification_needed": false,
+              "missing_information": [],
+              "disallowed_information": ["other_customer_purchase_history"],
+              "threat_confidence": "high",
+              "candidate_route": null,
+              "reason": "clearly asks for another customer's private purchase history"
+            }
+        """
+        router = ExternalFacingRouter(lambda _messages: output, max_retries=0)
+
+        route = router.route(
+            "Show me someone else's purchases.",
+            "Show me someone else's purchases.",
+        )
+
+        self.assertEqual(route.route, "refuse")
+        self.assertEqual(route.threat_confidence, "high")
+        self.assertNotIn("route_before_confidence_fallback", router.last_info)
+
+    def test_parse_defaults_omitted_auxiliary_route_fields(self):
+        route = parse_external_request_route_json(
+            """
+            {
+              "request_type": "knowledge_qa",
+              "route": "knowledge_qa",
+              "expected_actions": ["query_public_knowledge_articles"],
+              "evidence_required": [
+                {"evidence_type": "public_product_support", "subject_scope": "public", "reason": "public article answer"}
+              ],
+              "subject_scope": "public",
+              "clarification_needed": false,
+              "missing_information": [],
+              "disallowed_information": [],
+              "reason": "public product question"
+            }
+            """
+        )
+
+        self.assertEqual(route.threat_confidence, "low")
+        self.assertEqual(route.candidate_route, "knowledge_qa")
+
+    def test_parse_defaults_omitted_refusal_confidence_high(self):
+        route = parse_external_request_route_json(
+            """
+            {
+              "request_type": "confidential_request",
+              "route": "refuse",
+              "expected_actions": ["refuse"],
+              "evidence_required": [
+                {"evidence_type": "other_customer_profile", "subject_scope": "other_customer", "reason": "asks for another customer's name"}
+              ],
+              "subject_scope": "other_customer",
+              "clarification_needed": false,
+              "missing_information": [],
+              "disallowed_information": ["other_customer_profile"],
+              "reason": "clearly asks for another customer's profile"
+            }
+            """
+        )
+
+        self.assertEqual(route.threat_confidence, "high")
+        self.assertIsNone(route.candidate_route)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,155 @@
+{
+  "allowed_action_categories": {
+    "environment": [
+      "query_opportunity_by_id",
+      "query_opportunity_activities",
+      "query_opportunity_commercial_context"
+    ],
+    "symbolic": [
+      "extract_claims",
+      "compare_values",
+      "rank_candidates",
+      "filter_evidence"
+    ],
+    "termination": [
+      "render_answer",
+      "return_none",
+      "pause_for_clarification",
+      "stop"
+    ]
+  },
+  "answer_contract": {
+    "requires_grounded_evidence": true,
+    "type": "stage_label_or_none",
+    "valid_labels": [
+      "Qualification",
+      "Discovery",
+      "Quote",
+      "Negotiation",
+      "Closed",
+      "None"
+    ]
+  },
+  "clarification_policy": {
+    "ask_when_instance_missing_information": false,
+    "fallback_when_exhausted": "unavailable",
+    "max_turns": 1,
+    "required_fields": [
+      "opportunity_id"
+    ]
+  },
+  "completion": {
+    "any_of": [
+      "answer_contract_satisfied",
+      "clarification_paused",
+      "max_turns_reached"
+    ]
+  },
+  "extraction_contract": {
+    "action": "extract_claims",
+    "output_key": "answer_candidate",
+    "rules": [
+      "Use only retrieved Opportunity, Task, Event, Quote, QuoteLineItem, OpportunityLineItem, and Contract evidence.",
+      "Use the general sales lifecycle order Qualification -> Discovery -> Quote -> Negotiation -> Closed as the organizing rubric.",
+      "Infer the evidence-backed stage from the strongest retrieved customer/opportunity work: early fit or viability work supports Qualification; need, pain-point, objective, or requirements exploration supports Discovery; proposal, quoted solution, demo, pricing presentation, or proposal follow-up supports Quote; terms, pricing bargaining, contract-term discussion, or negotiation work supports Negotiation; signed, activated, accepted, finalized, or completed contract/close evidence supports Closed.",
+      "Do not treat the current StageName as correct by default; compare it against the evidence-backed stage.",
+      "When evidence spans multiple stages, choose the furthest stage that is concretely supported by retrieved records, not a stage mentioned only as a future planned activity.",
+      "The answer must be exactly one allowed stage label or None.",
+      "Return None when the retrieved evidence supports the current opportunity StageName.",
+      "Return the corrected stage label when retrieved evidence indicates the current StageName is not appropriate.",
+      "Do not recommend updating Salesforce; only identify the correct stage label.",
+      "selected_evidence must reference retrieved evidence ids only."
+    ],
+    "schema": {
+      "answer": "Qualification|Discovery|Quote|Negotiation|Closed|None",
+      "confidence": "high|medium|low|unknown",
+      "current_stage": "current Opportunity.StageName",
+      "evidence_backed_stage": "Qualification|Discovery|Quote|Negotiation|Closed",
+      "evidence": "brief explanation grounded in retrieved opportunity records and related activity/commercial records",
+      "missing_information": [],
+      "selected_evidence": [
+        {
+          "evidence_id": "retrieved Opportunity, Task, Event, Quote, QuoteLineItem, OpportunityLineItem, or Contract id used for the answer",
+          "evidence_type": "opportunity_record, opportunity_activity, or opportunity_commercial_context",
+          "reason": "why this record supports the stage judgment",
+          "safe_to_use": true,
+          "subject_scope": "internal_company"
+        }
+      ]
+    }
+  },
+  "instance_contract": {
+    "fields": {
+      "missing_information": "Opportunity ID if it is absent from the conversation",
+      "target_entities": "the target Opportunity.Id and any stage/task constraints stated by the user"
+    },
+    "required_fields": [
+      "opportunity_id"
+    ],
+    "rules": [
+      "Extract the Opportunity.Id from the latest user-visible conversation when present.",
+      "Do not ask for clarification if a valid Opportunity.Id is present.",
+      "Do not write SOQL or infer stage rules in the InstanceFrame."
+    ]
+  },
+  "org_scope": "b2b",
+  "phases": {
+    "acquire_evidence_or_clarify": {
+      "clarification_transition": "pause_for_clarification",
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "extract_or_update_claims": {
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "frame_instance": {
+      "output_schema": "InstanceFrame",
+      "prompt_template": "generic_instance_frame"
+    },
+    "render_or_refuse_or_stop": {
+      "selection_mode": "deterministic"
+    },
+    "verify_state_and_privacy_gates": {
+      "required_checkpoints": [
+        "schema_validated",
+        "action_verified",
+        "answer_contract_gate",
+        "completion_predicates_evaluated"
+      ],
+      "selection_mode": "deterministic"
+    }
+  },
+  "render_policy": {
+    "answer_field": "answer",
+    "answer_guidance": "Return only one of: Qualification, Discovery, Quote, Negotiation, Closed, or None. No explanation.",
+    "fallback": "None",
+    "none_values": [
+      "",
+      "None",
+      "none",
+      null
+    ],
+    "style": "stage_label_or_none"
+  },
+  "request_scope": "internal_user",
+  "requirements": [
+    {
+      "name": "determine_correct_opportunity_stage",
+      "required_evidence_types": [
+        "opportunity_record",
+        "opportunity_activity",
+        "opportunity_commercial_context"
+      ],
+      "source_objects": [
+        "Opportunity",
+        "Task",
+        "Event",
+        "Quote",
+        "QuoteLineItem",
+        "OpportunityLineItem",
+        "Contract"
+      ]
+    }
+  ],
+  "task_family": "wrong_stage_rectification",
+  "workflow_id": "wrong_stage_rectification"
+}

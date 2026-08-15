@@ -1,10 +1,11 @@
 from dotenv import load_dotenv
 import json, os
-from crm_sandbox.agents import ChatAgent, ChatAgentDSL, ToolCallAgent
+from crm_sandbox.agents import ChatAgent, ChatAgentDSL, ChatAgentGeneralRuntimeDSL, ToolCallAgent
 from crm_sandbox.agents.utils import BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP
 from crm_sandbox.data.assets import TASKS_ORIGINAL, SCHEMA_ORIGINAL, TASKS_B2B, TASKS_B2B_INTERACTIVE, TASKS_B2C, TASKS_B2C_INTERACTIVE, B2B_SCHEMA, B2C_SCHEMA, EXTERNAL_FACING_TASKS
 from crm_sandbox.env.env import ChatEnv, ToolEnv, InteractiveChatEnv
 from crm_sandbox.env import TOOLS, TOOLS_FULL
+from crm_sandbox.model_client import default_model_for_provider, normalize_model_for_provider
 from crm_sandbox.orchestration import route_task, scaffold_for_family, scaffold_for_task
 import traceback
 import argparse
@@ -32,6 +33,17 @@ TASK_CATEGORY_CHOICES = [
     "all",
 ]
 
+PROVIDER_CHOICES = ["bedrock", "together_ai", "openai", "vertex_ai", "openrouter", "claude_cli", "codex_cli"]
+
+
+def _resolve_model_for_provider(explicit_model, fallback_model, provider):
+    if explicit_model:
+        return normalize_model_for_provider(explicit_model, provider)
+    provider_default = default_model_for_provider(provider, None)
+    if provider_default:
+        return normalize_model_for_provider(provider_default, provider)
+    return fallback_model
+
 
 def _is_success_reward(reward):
     if reward == 1 or reward == 1.0 or reward is True:
@@ -41,14 +53,68 @@ def _is_success_reward(reward):
     return False
 
 
+def _redacted_args(args):
+    redacted = vars(args).copy()
+    for key in ("judge_api_key", "user_api_key"):
+        if redacted.get(key):
+            redacted[key] = "<redacted>"
+    return argparse.Namespace(**redacted)
+
+
+def _sum_optional_numbers(values):
+    total = 0.0
+    found = False
+    for value in values or []:
+        if isinstance(value, (int, float)):
+            total += value
+            found = True
+    return total if found else None
+
+
+def _result_metrics(agent_info, task_wall_time_seconds):
+    if not isinstance(agent_info, dict):
+        return {"task_wall_time_seconds": task_wall_time_seconds}
+    usage = agent_info.get("usage") or {}
+    total_cost = agent_info.get("total_cost")
+    if isinstance(usage, dict) and "cost" in usage:
+        total_cost = _sum_optional_numbers(usage.get("cost"))
+    metrics = {
+        "time_to_resolution_seconds": agent_info.get("time_to_resolution_seconds"),
+        "task_wall_time_seconds": task_wall_time_seconds,
+        "model_calls": agent_info.get("model_calls"),
+        "env_steps": agent_info.get("env_steps"),
+        "usage": usage,
+        "total_cost": total_cost,
+    }
+    if isinstance(usage, dict):
+        metrics["total_prompt_tokens"] = _sum_optional_numbers(usage.get("prompt_tokens"))
+        metrics["total_completion_tokens"] = _sum_optional_numbers(usage.get("completion_tokens"))
+        metrics["total_tokens"] = _sum_optional_numbers(usage.get("total_tokens"))
+    return metrics
+
+
+def _safe_agent_messages(agent):
+    try:
+        return agent.get_messages()
+    except Exception as exc:
+        return [
+            {
+                "role": "system",
+                "content": "Trajectory unavailable because the task failed before agent messages were initialized: "
+                + str(exc),
+            }
+        ]
+
+
 def run():
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
-    judge_model = args.judge_model or args.model
     judge_provider = args.judge_provider or args.llm_provider
-    user_model = args.user_model or judge_model
     user_provider = args.user_provider or judge_provider
-    ckpt_path = f"{args.log_dir}/results_{args.model}_{args.agent_strategy}_{args.task_category}.json"
+    agent_model = normalize_model_for_provider(args.model, args.llm_provider)
+    judge_model = _resolve_model_for_provider(args.judge_model, agent_model, judge_provider)
+    user_model = _resolve_model_for_provider(args.user_model, judge_model, user_provider)
+    ckpt_path = f"{args.log_dir}/results_{agent_model}_{args.agent_strategy}_{args.task_category}.json"
     os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
     print(f"Judge model/provider: {judge_model} / {judge_provider}")
     if args.judge_base_url:
@@ -91,6 +157,19 @@ def run():
             raise ValueError(f"Unsupported task category: {args.task_category}")
         selected_tasks = [task for task in TASKS_NATURAL if task["task"] == args.task_category]
 
+    requested_task_ids = None
+    if args.task_ids:
+        requested_task_ids = {
+            int(task_id.strip())
+            for task_id in args.task_ids.split(",")
+            if task_id.strip()
+        }
+        selected_ids = {task["idx"] for task in selected_tasks}
+        missing_requested = sorted(requested_task_ids - selected_ids)
+        if missing_requested:
+            print(f"Warning: requested task_ids not selected by org/category filters: {missing_requested}")
+        selected_tasks = [task for task in selected_tasks if task["idx"] in requested_task_ids]
+
     if args.max_tasks_per_category > 0:
         capped_tasks = []
         category_counts = {}
@@ -109,7 +188,19 @@ def run():
     if os.path.exists(ckpt_path):
         if args.reuse_results:
             with open(ckpt_path, 'r') as f:
-                completed_tasks = {task['task_id']: task for task in json.load(f)}
+                data_res = json.load(f)
+            if args.rerun_task_ids and requested_task_ids:
+                before_count = len(data_res)
+                data_res = [
+                    task for task in data_res
+                    if task.get("task_id") not in requested_task_ids
+                ]
+                removed_count = before_count - len(data_res)
+                if removed_count:
+                    with open(ckpt_path, "w") as f:
+                        json.dump(data_res, f, indent=2)
+                    print(f"Removed {removed_count} existing checkpoint rows for requested rerun task_ids")
+            completed_tasks = {task['task_id']: task for task in data_res}
         else:
             os.remove(ckpt_path)
             
@@ -120,7 +211,7 @@ def run():
     print(f"Starting evaluation at {start_time}")
     selected_tasks = {t['idx']: t for t in selected_tasks}
     
-    if args.agent_strategy in ["act", "react", "lead_dsl"]:
+    if args.agent_strategy in ["act", "react", "lead_dsl", "general_dsl"]:
         if args.interactive:
             if args.agent_strategy == "act":
                 raise ValueError(
@@ -215,14 +306,18 @@ def run():
                 f"scaffold_source={scaffold_source}",
                 f"evidence={routing_result.evidence}",
             )
-        if args.agent_strategy in ["react", "lead_dsl"]:
-            agent_cls = ChatAgentDSL if args.agent_strategy == "lead_dsl" else ChatAgent
+        if args.agent_strategy in ["react", "lead_dsl", "general_dsl"]:
+            agent_cls = ChatAgent
+            if args.agent_strategy == "lead_dsl":
+                agent_cls = ChatAgentDSL
+            elif args.agent_strategy == "general_dsl":
+                agent_cls = ChatAgentGeneralRuntimeDSL
             agent = agent_cls(
-                model=args.model,
+                model=agent_model,
                 schema_obj=SCHEMA,
                 eval_mode=args.agent_eval_mode,
                 max_turns=args.max_turns,
-                strategy="react" if args.agent_strategy == "lead_dsl" else args.agent_strategy,
+                strategy="react" if args.agent_strategy in ["lead_dsl", "general_dsl"] else args.agent_strategy,
                 provider=args.llm_provider,
                 interactive=args.interactive,
                 agent_type=agent_type,
@@ -246,7 +341,7 @@ def run():
         else:
             
             agent = ToolCallAgent(
-                model=args.model,
+                model=agent_model,
                 tools=env.tools_info,
                 schema_obj=SCHEMA,
                 eval_mode=args.agent_eval_mode,
@@ -255,11 +350,13 @@ def run():
                 provider=args.llm_provider
             )
         print(f"Running task {idx}")
+        task_wall_start = time.perf_counter()
         try:
             reward = agent.act(
                 env,
                 idx
             )
+            agent_info = agent.info
             result = {
                 "task_id": idx,
                 "task_type": task["task"],
@@ -270,11 +367,15 @@ def run():
                 "scaffold_source": scaffold_source,
                 "quote_clipboard_enabled": args.use_quote_clipboard,
                 "lead_clipboard_enabled": args.use_lead_clipboard,
-                "agent_info": agent.info,
-                "traj": agent.get_messages(),
+                "agent_info": agent_info,
+                "traj": _safe_agent_messages(agent),
             }
         except Exception as e:
             traceback.print_exc()
+            agent_info = {
+                "source": "api",
+                "content": "Error: " + str(e)
+            }
             result = {
                 "task_id": idx,
                 "task_type": task["task"],
@@ -285,12 +386,10 @@ def run():
                 "scaffold_source": scaffold_source,
                 "quote_clipboard_enabled": args.use_quote_clipboard,
                 "lead_clipboard_enabled": args.use_lead_clipboard,
-                "agent_info": {
-                    "source": "api",
-                    "content": "Error: " + str(e)
-                },
-                "traj": agent.get_messages(),
+                "agent_info": agent_info,
+                "traj": _safe_agent_messages(agent),
             }
+        result.update(_result_metrics(agent_info, time.perf_counter() - task_wall_start))
         print(
             "✅" if _is_success_reward(result["reward"]) else "❌",
             f"task_id={idx}"
@@ -320,7 +419,7 @@ if __name__ == "__main__":
         "--agent_strategy",
         type=str,
         default="react",
-        choices=["tool_call", "act", "react", "lead_dsl", "tool_call_flex"],
+        choices=["tool_call", "act", "react", "lead_dsl", "general_dsl", "tool_call_flex"],
     )
     parser.add_argument(
         "--agent_eval_mode",
@@ -332,7 +431,7 @@ if __name__ == "__main__":
         "--llm_provider",
         type=str,
         default="bedrock",
-        choices=["bedrock", "together_ai", "openai", "vertex_ai"]
+        choices=PROVIDER_CHOICES
     )
     parser.add_argument(
         "--judge_model",
@@ -344,7 +443,7 @@ if __name__ == "__main__":
         "--judge_provider",
         type=str,
         default=None,
-        choices=["bedrock", "together_ai", "openai", "vertex_ai"],
+        choices=PROVIDER_CHOICES,
         help="LiteLLM provider for evaluator/judge calls. Defaults to --llm_provider.",
     )
     parser.add_argument(
@@ -369,7 +468,7 @@ if __name__ == "__main__":
         "--user_provider",
         type=str,
         default=None,
-        choices=["bedrock", "together_ai", "openai", "vertex_ai"],
+        choices=PROVIDER_CHOICES,
         help="LiteLLM provider for interactive user simulation. Defaults to --judge_provider or --llm_provider.",
     )
     parser.add_argument(
@@ -395,6 +494,17 @@ if __name__ == "__main__":
         type=int,
         default=0,
         help="Optional cap for smoke tests. 0 means run all selected examples.",
+    )
+    parser.add_argument(
+        "--task_ids",
+        type=str,
+        default="",
+        help="Optional comma-separated task idx values to run after org/category filtering.",
+    )
+    parser.add_argument(
+        "--rerun_task_ids",
+        action="store_true",
+        help="With --reuse_results and --task_ids, remove matching checkpoint rows before rerunning them.",
     )
     parser.add_argument(
         "--max_turns",
@@ -501,12 +611,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--privacy_aware_prompt",
         type=lambda x: {'true': True, 'false': False}[x.lower()],
-        default=False,
+        default=True,
         help="Whether to use a privacy-aware prompt. Accepts 'true' or 'false'. (default: %(default)s)"
     )
     parser.add_argument("--log_dir", type=str, default="logs")
     args = parser.parse_args()
-    print(args)
+    print(_redacted_args(args))
 
     run()
     

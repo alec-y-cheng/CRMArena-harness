@@ -12,6 +12,14 @@ set -euo pipefail
 #   ORG_TYPES_CSV=b2b \
 #   ./run_tasks_crmarena_pro.sh
 
+MODEL_CONFIG_FILE="${MODEL_CONFIG_FILE:-/work/hdd/bgtb/acheng11/.model-configs.txt}"
+if [[ -f "$MODEL_CONFIG_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$MODEL_CONFIG_FILE"
+  set +a
+fi
+
 AGENT_MODEL="${AGENT_MODEL:-openai/Qwen3.5-35B-A3B}"
 AGENT_PROVIDER="${AGENT_PROVIDER:-openai}"
 AGENT_BASE_URL="${AGENT_BASE_URL:-${OPENAI_BASE_URL:-http://127.0.0.1:8001/v1}}"
@@ -27,15 +35,27 @@ if [[ "$USE_LLAMA_JUDGE" == "true" && -n "${LLAMA_HOST:-}" ]]; then
   USER_BASE_URL="${USER_BASE_URL:-$JUDGE_BASE_URL}"
 fi
 
-JUDGE_MODEL="${JUDGE_MODEL:-$AGENT_MODEL}"
 JUDGE_PROVIDER="${JUDGE_PROVIDER:-openai}"
-JUDGE_BASE_URL="${JUDGE_BASE_URL:-$AGENT_BASE_URL}"
-JUDGE_API_KEY="${JUDGE_API_KEY:-$AGENT_API_KEY}"
+if [[ "$JUDGE_PROVIDER" == "openrouter" ]]; then
+  JUDGE_MODEL="${JUDGE_MODEL:-${OPENROUTER_DEFAULT_MODEL:-openai/gpt-4o-2024-11-20}}"
+  JUDGE_BASE_URL="${JUDGE_BASE_URL:-}"
+  JUDGE_API_KEY="${JUDGE_API_KEY:-${OPENROUTER_API_KEY:-}}"
+else
+  JUDGE_MODEL="${JUDGE_MODEL:-$AGENT_MODEL}"
+  JUDGE_BASE_URL="${JUDGE_BASE_URL:-$AGENT_BASE_URL}"
+  JUDGE_API_KEY="${JUDGE_API_KEY:-$AGENT_API_KEY}"
+fi
 
-USER_MODEL="${USER_MODEL:-$JUDGE_MODEL}"
 USER_PROVIDER="${USER_PROVIDER:-$JUDGE_PROVIDER}"
-USER_BASE_URL="${USER_BASE_URL:-$JUDGE_BASE_URL}"
-USER_API_KEY="${USER_API_KEY:-$JUDGE_API_KEY}"
+if [[ "$USER_PROVIDER" == "openrouter" ]]; then
+  USER_MODEL="${USER_MODEL:-${OPENROUTER_DEFAULT_MODEL:-openai/gpt-4o-2024-11-20}}"
+  USER_BASE_URL="${USER_BASE_URL:-}"
+  USER_API_KEY="${USER_API_KEY:-${OPENROUTER_API_KEY:-$JUDGE_API_KEY}}"
+else
+  USER_MODEL="${USER_MODEL:-$JUDGE_MODEL}"
+  USER_BASE_URL="${USER_BASE_URL:-$JUDGE_BASE_URL}"
+  USER_API_KEY="${USER_API_KEY:-$JUDGE_API_KEY}"
+fi
 
 DEFAULT_TASKS_CSV="quote_approval,lead_qualification,case_routing,private_customer_information,internal_operation_data,confidential_company_knowledge"
 TASKS_CSV="${TASKS_CSV:-$DEFAULT_TASKS_CSV}"
@@ -46,6 +66,8 @@ INTERACTIVE="${INTERACTIVE:-true}"
 MAX_TURNS="${MAX_TURNS:-20}"
 MAX_USER_TURNS="${MAX_USER_TURNS:-10}"
 MAX_TASKS_PER_CATEGORY="${MAX_TASKS_PER_CATEGORY:-0}"
+TASK_IDS_CSV="${TASK_IDS_CSV:-}"
+RERUN_TASK_IDS="${RERUN_TASK_IDS:-false}"
 AGENT_MAX_TOKENS="${AGENT_MAX_TOKENS:-2500}"
 LEAD_DSL_EXTRACTOR_MAX_TOKENS="${LEAD_DSL_EXTRACTOR_MAX_TOKENS:-1800}"
 LEAD_DSL_DISABLE_THINKING="${LEAD_DSL_DISABLE_THINKING:-true}"
@@ -62,14 +84,18 @@ LEAD_CLIPBOARD_MAX_CHARS="${LEAD_CLIPBOARD_MAX_CHARS:-1000}"
 ROUTING_MODE="${ROUTING_MODE:-deterministic}"
 ROUTING_MIN_CONFIDENCE="${ROUTING_MIN_CONFIDENCE:-0.55}"
 SCAFFOLD_MODE="${SCAFFOLD_MODE:-routed}"
-PRIVACY_AWARE_PROMPT="${PRIVACY_AWARE_PROMPT:-false}"
+PRIVACY_AWARE_PROMPT="${PRIVACY_AWARE_PROMPT:-true}"
 MAX_JOBS="${MAX_JOBS:-1}"
 RUN_TAG="${RUN_TAG:-qwen35_llama31_8b_judge_user}"
+LOG_TAG="${LOG_TAG:-$RUN_TAG}"
 RESULT_SUFFIX="${RESULT_SUFFIX:-}"
 
 export OPENAI_API_KEY="$AGENT_API_KEY"
 export OPENAI_API_BASE="$AGENT_BASE_URL"
 export OPENAI_BASE_URL="$AGENT_BASE_URL"
+if [[ -n "${OPENROUTER_API_KEY:-$JUDGE_API_KEY}" ]]; then
+  export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-$JUDGE_API_KEY}"
+fi
 export HF_HOME="${HF_HOME:-/work/hdd/bgtb/acheng11/qwen_agent_ft/cache/huggingface}"
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
@@ -103,9 +129,15 @@ check_endpoint() {
 }
 
 if [[ "$SKIP_HEALTH_CHECKS" != "true" ]]; then
-  check_endpoint "agent" "$AGENT_BASE_URL"
-  check_endpoint "judge" "$JUDGE_BASE_URL"
-  check_endpoint "user simulator" "$USER_BASE_URL"
+  if [[ "$AGENT_PROVIDER" != "codex_cli" && "$AGENT_PROVIDER" != "claude_cli" && -n "$AGENT_BASE_URL" ]]; then
+    check_endpoint "agent" "$AGENT_BASE_URL"
+  fi
+  if [[ -n "$JUDGE_BASE_URL" ]]; then
+    check_endpoint "judge" "$JUDGE_BASE_URL"
+  fi
+  if [[ -n "$USER_BASE_URL" ]]; then
+    check_endpoint "user simulator" "$USER_BASE_URL"
+  fi
 fi
 
 split_csv() {
@@ -167,12 +199,20 @@ if [[ "$USE_LEAD_CLIPBOARD" == "true" ]]; then
   LEAD_CLIPBOARD_ARG=(--use_lead_clipboard)
   LEAD_CLIPBOARD_LABEL="_leadclipboard"
 fi
+TASK_IDS_ARG=()
+if [[ -n "$TASK_IDS_CSV" ]]; then
+  TASK_IDS_ARG=(--task_ids "$TASK_IDS_CSV")
+fi
+RERUN_TASK_IDS_ARG=()
+if [[ "$RERUN_TASK_IDS" == "true" ]]; then
+  RERUN_TASK_IDS_ARG=(--rerun_task_ids)
+fi
 
 for ORG_TYPE in "${ORG_TYPES[@]}"; do
   for TASK_CATEGORY in "${TASKS[@]}"; do
     FEATURE_SUFFIX="${RESULT_SUFFIX:-_${VERIFIER_LABEL}_${MEMORY_LABEL}${QUOTE_CLIPBOARD_LABEL}${LEAD_CLIPBOARD_LABEL}}"
     RESULT_DIR="results/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${RUN_TAG}${FEATURE_SUFFIX}"
-    LOG_DIR="logs/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${RUN_TAG}${FEATURE_SUFFIX}"
+    LOG_DIR="logs/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${LOG_TAG}${FEATURE_SUFFIX}"
     mkdir -p "$RESULT_DIR" "$LOG_DIR"
     LOG_FILE="${LOG_DIR}/run_${TASK_CATEGORY}_${EVAL_MODE}.log"
 
@@ -184,6 +224,8 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
     echo "  lead_dsl_extractor_max_tokens=$LEAD_DSL_EXTRACTOR_MAX_TOKENS"
     echo "  lead_dsl_disable_thinking=$LEAD_DSL_DISABLE_THINKING"
     echo "  max_tasks_per_category=$MAX_TASKS_PER_CATEGORY"
+    echo "  task_ids=${TASK_IDS_CSV:-all}"
+    echo "  rerun_task_ids=$RERUN_TASK_IDS"
     echo "  syntactic_verifier=$USE_SYNTACTIC_VERIFIER max_verifier_retries=$MAX_VERIFIER_RETRIES"
     echo "  working_memory=$USE_WORKING_MEMORY max_chars=$WORKING_MEMORY_MAX_CHARS"
     echo "  quote_clipboard=$USE_QUOTE_CLIPBOARD max_chars=$QUOTE_CLIPBOARD_MAX_CHARS"
@@ -211,6 +253,8 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
       --max_turns "$MAX_TURNS" \
       --max_user_turns "$MAX_USER_TURNS" \
       --max_tasks_per_category "$MAX_TASKS_PER_CATEGORY" \
+      "${TASK_IDS_ARG[@]}" \
+      "${RERUN_TASK_IDS_ARG[@]}" \
       --agent_max_tokens "$AGENT_MAX_TOKENS" \
       --max_verifier_retries "$MAX_VERIFIER_RETRIES" \
       --working_memory_max_chars "$WORKING_MEMORY_MAX_CHARS" \

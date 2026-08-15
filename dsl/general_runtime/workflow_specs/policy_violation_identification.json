@@ -1,0 +1,168 @@
+{
+  "allowed_action_categories": {
+    "environment": [
+      "query_case_by_id",
+      "query_case_interactions",
+      "query_case_linked_context",
+      "query_internal_policy_articles"
+    ],
+    "symbolic": [
+      "extract_claims",
+      "compare_values",
+      "rank_candidates",
+      "filter_evidence"
+    ],
+    "termination": [
+      "render_answer",
+      "return_none",
+      "pause_for_clarification",
+      "stop"
+    ]
+  },
+  "answer_contract": {
+    "requires_grounded_evidence": true,
+    "type": "violating_policy_article_id_or_none"
+  },
+  "clarification_policy": {
+    "ask_when_instance_missing_information": false,
+    "fallback_when_exhausted": "unavailable",
+    "max_turns": 1,
+    "required_fields": [
+      "case_id"
+    ]
+  },
+  "completion": {
+    "any_of": [
+      "answer_contract_satisfied",
+      "clarification_paused",
+      "max_turns_reached"
+    ]
+  },
+  "extraction_contract": {
+    "action": "extract_claims",
+    "output_key": "answer_candidate",
+    "rules": [
+      "Use only retrieved Case, linked case context, case interaction/history, and Knowledge__kav evidence.",
+      "Compare the case facts, linked issue/product context, customer issue, and any agent handling evidence against retrieved policy or solution articles.",
+      "Treat an article that matches the issue/product as a candidate policy article, not as proof of a violation by itself.",
+      "Return the Knowledge__kav.Id only when the retrieved case facts directly contradict a condition, eligibility rule, support standard, or documented obligation in that article.",
+      "Agent emails/history can support the decision, but explicit agent misconduct is not required.",
+      "Do not infer a violation solely because CaseHistory or EmailMessage lacks an entry showing that a recommended remedy was delivered.",
+      "Return None when no retrieved article is materially implicated, when the facts merely show a customer issue with a matching solution article, or when the retrieved facts are insufficient to establish non-compliance.",
+      "Do not return article titles, explanations, or multiple candidates in the answer field.",
+      "selected_evidence must reference retrieved evidence ids only."
+    ],
+    "schema": {
+      "answer": "Knowledge__kav.Id of violated policy article, or None",
+      "confidence": "high|medium|low|unknown",
+      "evidence": "brief explanation grounded in case facts, linked context, interaction evidence, and policy article text",
+      "missing_information": [],
+      "selected_evidence": [
+        {
+          "evidence_id": "retrieved Case, linked context, interaction, or Knowledge__kav id used for the answer",
+          "evidence_type": "case_record, case_interaction, case_issue_record, case_order_item, case_order_record, case_product_record, or internal_policy_article",
+          "reason": "why this evidence supports or rules out the policy violation",
+          "safe_to_use": true,
+          "subject_scope": "internal_company"
+        }
+      ]
+    }
+  },
+  "evidence_ranking": {
+    "always_include_evidence_types": [
+      "case_record",
+      "case_interaction",
+      "case_issue_record",
+      "case_order_item",
+      "case_order_record",
+      "case_product_record"
+    ],
+    "max_items": 40,
+    "max_ranked_items_per_type": {
+      "internal_policy_article": 32
+    },
+    "rank_evidence_types": [
+      "internal_policy_article"
+    ]
+  },
+  "instance_contract": {
+    "fields": {
+      "missing_information": "Case ID if it is absent from the conversation",
+      "query_terms": "concise internal policy search terms if the prompt or case details imply a specific policy area",
+      "target_entities": "the target Case.Id and any stated policy-violation focus"
+    },
+    "required_fields": [
+      "case_id"
+    ],
+    "rules": [
+      "Extract the Case.Id from the latest user-visible conversation when present.",
+      "Do not ask for clarification if a valid Case.Id is present.",
+      "Use query_terms for policy retrieval when the user prompt gives a policy area, but do not invent a specific article id or title."
+    ]
+  },
+  "org_scope": "b2b",
+  "phases": {
+    "acquire_evidence_or_clarify": {
+      "clarification_transition": "pause_for_clarification",
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "extract_or_update_claims": {
+      "selection_mode": "deterministic_when_single_enabled"
+    },
+    "frame_instance": {
+      "output_schema": "InstanceFrame",
+      "prompt_template": "generic_instance_frame"
+    },
+    "render_or_refuse_or_stop": {
+      "selection_mode": "deterministic"
+    },
+    "verify_state_and_privacy_gates": {
+      "required_checkpoints": [
+        "schema_validated",
+        "action_verified",
+        "answer_contract_gate",
+        "completion_predicates_evaluated"
+      ],
+      "selection_mode": "deterministic"
+    }
+  },
+  "render_policy": {
+    "answer_field": "answer",
+    "answer_guidance": "Return only one Knowledge__kav.Id or None. No explanation.",
+    "fallback": "None",
+    "none_values": [
+      "",
+      "None",
+      "none",
+      null
+    ],
+    "style": "id_or_none"
+  },
+  "request_scope": "internal_user",
+  "requirements": [
+    {
+      "name": "identify_policy_violation",
+      "required_evidence_types": [
+        "case_record",
+        "case_interaction",
+        "case_issue_record",
+        "case_order_item",
+        "case_order_record",
+        "case_product_record",
+        "internal_policy_article"
+      ],
+      "source_objects": [
+        "Case",
+        "EmailMessage",
+        "CaseHistory__c",
+        "Issue__c",
+        "OrderItem",
+        "Order",
+        "Product2",
+        "Knowledge__kav"
+      ]
+    }
+  ],
+  "task_family": "policy_violation_identification",
+  "workflow_id": "policy_violation_identification"
+}
