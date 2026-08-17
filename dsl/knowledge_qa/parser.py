@@ -31,7 +31,7 @@ def parse_knowledge_search_plan_json(text: str) -> KnowledgeQASearchPlan:
         "search_terms",
         "product_terms",
         "clarification_needed",
-        "missing_information",
+        "clarification_requirements",
     ]
     _require_keys(data, required)
     return KnowledgeQASearchPlan(
@@ -39,7 +39,7 @@ def parse_knowledge_search_plan_json(text: str) -> KnowledgeQASearchPlan:
         search_terms=_string_list(data["search_terms"], "search_terms"),
         product_terms=_string_list(data["product_terms"], "product_terms"),
         clarification_needed=_as_bool(data["clarification_needed"], "clarification_needed"),
-        missing_information=_string_list(data["missing_information"], "missing_information"),
+        clarification_requirements=_string_list(data["clarification_requirements"], "clarification_requirements"),
     )
 
 

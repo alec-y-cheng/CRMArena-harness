@@ -31,7 +31,7 @@
     ]
   },
   "clarification_policy": {
-    "ask_when_instance_missing_information": false,
+    "ask_when_instance_clarification_requirements": false,
     "fallback_when_exhausted": "unavailable",
     "max_turns": 1,
     "required_fields": [
@@ -66,7 +66,7 @@
       "current_stage": "current Opportunity.StageName",
       "evidence_backed_stage": "Qualification|Discovery|Quote|Negotiation|Closed",
       "evidence": "brief explanation grounded in retrieved opportunity records and related activity/commercial records",
-      "missing_information": [],
+      "clarification_requirements": [],
       "selected_evidence": [
         {
           "evidence_id": "retrieved Opportunity, Task, Event, Quote, QuoteLineItem, OpportunityLineItem, or Contract id used for the answer",
@@ -80,7 +80,7 @@
   },
   "instance_contract": {
     "fields": {
-      "missing_information": "Opportunity ID if it is absent from the conversation",
+      "clarification_requirements": "Opportunity ID if it is absent from the conversation",
       "target_entities": "the target Opportunity.Id and any stage/task constraints stated by the user"
     },
     "required_fields": [

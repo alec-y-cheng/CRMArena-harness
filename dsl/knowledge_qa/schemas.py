@@ -13,14 +13,14 @@ KNOWLEDGE_QA_SEARCH_PLAN_SCHEMA: Dict[str, Any] = {
         "search_terms": {"type": "array", "items": {"type": "string"}},
         "product_terms": {"type": "array", "items": {"type": "string"}},
         "clarification_needed": {"type": "boolean"},
-        "missing_information": {"type": "array", "items": {"type": "string"}},
+        "clarification_requirements": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
         "normalized_question",
         "search_terms",
         "product_terms",
         "clarification_needed",
-        "missing_information",
+        "clarification_requirements",
     ],
     "additionalProperties": False,
 }

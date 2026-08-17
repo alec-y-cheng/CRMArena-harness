@@ -21,7 +21,7 @@
     "type": "short_answer_or_none"
   },
   "clarification_policy": {
-    "ask_when_instance_missing_information": false,
+    "ask_when_instance_clarification_requirements": false,
     "fallback_when_exhausted": "search_with_available_evidence",
     "max_turns": 0
   },
@@ -51,7 +51,7 @@
       "answer": "short customer-facing answer or None",
       "confidence": "high|medium|low|unknown",
       "evidence": "brief explanation grounded in retrieved records",
-      "missing_information": [],
+      "clarification_requirements": [],
       "selected_evidence": [
         {
           "evidence_id": "retrieved evidence id used for the answer",
@@ -67,7 +67,7 @@
     "fields": {
       "query_terms": "2-5 concise Knowledge__kav search phrases for the user's information need",
       "target_entities": "products, product classes, policies, support topics, symptoms, or requested facts mentioned by the customer",
-      "missing_information": "information needed before a public knowledge search would be meaningful"
+      "clarification_requirements": "information needed before a public knowledge search would be meaningful"
     },
     "required_fields": [
       "query_terms"
@@ -79,7 +79,7 @@
       "Do not include filler such as user seeks, determine, question, help, information, customer, or request unless those words are part of a product or policy name.",
       "For troubleshooting or care questions, include the product or activity and the concrete issue or maintenance action.",
       "For how/why questions, include the object and the mechanism or purpose being asked about.",
-      "Use missing_information only when the topic is too vague to search; otherwise search with the best available terms."
+      "Use clarification_requirements only when the topic is too vague to search; otherwise search with the best available terms."
     ]
   },
   "org_scope": "original",

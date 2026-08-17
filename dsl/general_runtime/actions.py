@@ -64,7 +64,7 @@ ACTION_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "render_answer": _action("termination", "Render an answer satisfying the answer contract.", ["answer_candidate"], preconditions={"all_of": ["answer_contract_satisfied"]}, effects={"sets": ["final_answer", "completion_state"], "may_set": []}),
     "refuse": _action("termination", "Refuse when disclosure violates gates.", ["blocked_information"], preconditions={"all_of": ["refusal_required"]}, effects={"sets": ["final_answer", "completion_state"], "may_set": []}),
     "return_none": _action("termination", "Return None when the answer contract calls for no finding.", preconditions={"all_of": ["none_answer_allowed"]}, effects={"sets": ["final_answer", "completion_state"], "may_set": []}),
-    "pause_for_clarification": _action("termination", "Pause workflow and ask for missing user-held information.", ["missing_information"], preconditions={"all_of": ["missing_information_blocks_progress"]}, effects={"sets": ["completion_state", "clarification_prompt"], "may_set": []}),
+    "pause_for_clarification": _action("termination", "Pause workflow and ask for missing user-held information.", ["clarification_requirements"], preconditions={"all_of": ["clarification_requirements_blocks_progress"]}, effects={"sets": ["completion_state", "clarification_prompt"], "may_set": []}),
     "stop": _action("termination", "Stop after completion or max-turn termination.", preconditions={"any_of": ["answer_contract_satisfied", "max_turns_reached"]}, effects={"sets": ["completion_state"], "may_set": []}),
 }
 

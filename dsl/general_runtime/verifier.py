@@ -20,7 +20,7 @@ KNOWN_PREDICATES = set([
     "retrieved_records_available", "pending_requirements_exist",
     "selected_evidence_available", "evidence_items_available",
     "comparison_values_available", "numeric_inputs_available", "candidates_available",
-    "none_answer_allowed", "missing_information_blocks_progress",
+    "none_answer_allowed", "clarification_requirements_blocks_progress",
     "workflow_scope_is_external", "privacy_precheck_allows_public_knowledge",
 ])
 
@@ -147,7 +147,7 @@ def _predicate_true(name: str, state: ExecutionState) -> bool:
     if name == "current_customer_scope_allowed": return state.workflow_spec.request_scope == "external_customer"
     if name == "workflow_scope_is_external": return state.workflow_spec.request_scope == "external_customer"
     if name == "privacy_precheck_allows_public_knowledge": return True
-    if name == "missing_information_blocks_progress": return bool(frame and frame.missing_information)
+    if name == "clarification_requirements_blocks_progress": return bool(frame and frame.clarification_requirements)
     if name == "answer_contract_satisfied": return bool(state.answer_candidate)
     if name == "refusal_required": return any(decision.get("allowed") is False for decision in state.privacy_gate_decisions)
     if name == "clarification_paused": return state.completion_state == "paused_for_clarification"

@@ -92,7 +92,7 @@ The router emits `ExternalRequestRoute`:
   ],
   "subject_scope": "public|current_customer|other_customer|internal_company|unknown",
   "clarification_needed": false,
-  "missing_information": [],
+  "clarification_requirements": [],
   "disallowed_information": [],
   "reason": "short grounded routing rationale"
 }
@@ -188,7 +188,7 @@ Examples of missing information:
 Clarification prompt inputs:
 
 - current route or task-specific extraction JSON;
-- `missing_information`;
+- `clarification_requirements`;
 - conversation history;
 - a rule to ask exactly one customer-facing question.
 

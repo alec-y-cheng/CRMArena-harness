@@ -17,7 +17,7 @@ NED_EXTRACTION_SCHEMA: Dict[str, Any] = {
         "exact_purchase_date": {"type": "string"},
         "attributes": {"type": "array", "items": {"type": "string"}},
         "clarification_needed": {"type": "boolean"},
-        "missing_information": {"type": "array", "items": {"type": "string"}},
+        "clarification_requirements": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
         "entity_phrase",
@@ -28,7 +28,7 @@ NED_EXTRACTION_SCHEMA: Dict[str, Any] = {
         "exact_purchase_date",
         "attributes",
         "clarification_needed",
-        "missing_information",
+        "clarification_requirements",
     ],
     "additionalProperties": False,
 }
@@ -41,14 +41,14 @@ NED_CANDIDATE_SELECTION_SCHEMA: Dict[str, Any] = {
         "evidence": {"type": "string"},
         "confidence": {"type": "string", "enum": ["high", "medium", "low", "unknown"]},
         "ambiguous": {"type": "boolean"},
-        "missing_information": {"type": "array", "items": {"type": "string"}},
+        "clarification_requirements": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
         "selected_product_id",
         "evidence",
         "confidence",
         "ambiguous",
-        "missing_information",
+        "clarification_requirements",
     ],
     "additionalProperties": False,
 }

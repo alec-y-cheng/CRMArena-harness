@@ -80,7 +80,7 @@ class ExternalFacingRouter:
             evidence_required=[],
             subject_scope="unknown",
             clarification_needed=True,
-            missing_information=["what you need help with"],
+            clarification_requirements=["what you need help with"],
             disallowed_information=[],
             threat_confidence="low",
             candidate_route=None,
@@ -100,7 +100,7 @@ class ExternalFacingRouter:
 
     def build_clarification(self, route: ExternalRequestRoute) -> str:
         """Build a clarification question for missing external-facing information."""
-        return respond_to_user(route.missing_information)
+        return respond_to_user(route.clarification_requirements)
 
     def build_refusal(self, route: ExternalRequestRoute) -> str:
         """Build a refusal when requested evidence is disallowed."""

@@ -104,7 +104,7 @@ class KnowledgeQADSLDriver:
             if state.search_plan and state.search_plan.clarification_needed:
                 if self._can_ask_user(env) and clarification_turns < self.max_clarification_turns:
                     clarification_turns += 1
-                    question = respond_to_user(state.search_plan.missing_information)
+                    question = respond_to_user(state.search_plan.clarification_requirements)
                     result = self._respond(env, messages, info, question)
                     info.setdefault("clarification_turns", []).append(
                         {
@@ -237,7 +237,7 @@ class KnowledgeQADSLDriver:
                             "Invalid knowledge search-plan JSON: {}. Retry with exactly one "
                             "JSON object and no prose. Include normalized_question, "
                             "search_terms, product_terms, clarification_needed, and "
-                            "missing_information."
+                            "clarification_requirements."
                         ).format(last_error),
                     }
                 )

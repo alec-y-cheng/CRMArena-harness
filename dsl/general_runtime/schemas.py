@@ -17,9 +17,9 @@ INSTANCE_FRAME_SCHEMA: Dict[str, Any] = {
         "product_terms": {"type": "array", "items": {"type": "string"}},
         "constraints": {"type": "array", "items": {"type": "object"}},
         "required_evidence_instances": {"type": "array", "items": {"type": "object"}},
-        "missing_information": {"type": "array", "items": {"type": "string"}},
+        "clarification_requirements": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["workflow_id", "request_summary", "target_entities", "required_evidence_instances", "missing_information"],
+    "required": ["workflow_id", "request_summary", "target_entities", "required_evidence_instances", "clarification_requirements"],
     "additionalProperties": False,
 }
 

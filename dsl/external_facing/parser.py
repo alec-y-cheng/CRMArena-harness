@@ -30,7 +30,7 @@ def parse_external_request_route_json(text: str) -> ExternalRequestRoute:
             "evidence_required",
             "subject_scope",
             "clarification_needed",
-            "missing_information",
+            "clarification_requirements",
             "disallowed_information",
             "reason",
         ],
@@ -68,18 +68,18 @@ def parse_external_request_route_json(text: str) -> ExternalRequestRoute:
         data["clarification_needed"],
         "clarification_needed",
     )
-    missing_information = _string_list(
-        data["missing_information"],
-        "missing_information",
+    clarification_requirements = _string_list(
+        data["clarification_requirements"],
+        "clarification_requirements",
     )
     if route == "clarify":
         if not clarification_needed:
             raise ExternalFacingParseError(
                 "route clarify requires clarification_needed=true"
             )
-        if not missing_information:
+        if not clarification_requirements:
             raise ExternalFacingParseError(
-                "route clarify requires missing_information"
+                "route clarify requires clarification_requirements"
             )
     if clarification_needed and route != "clarify":
         raise ExternalFacingParseError(
@@ -109,7 +109,7 @@ def parse_external_request_route_json(text: str) -> ExternalRequestRoute:
         evidence_required=evidence_required,
         subject_scope=subject_scope,
         clarification_needed=clarification_needed,
-        missing_information=missing_information,
+        clarification_requirements=clarification_requirements,
         disallowed_information=disallowed_information,
         threat_confidence=threat_confidence,
         candidate_route=candidate_route,

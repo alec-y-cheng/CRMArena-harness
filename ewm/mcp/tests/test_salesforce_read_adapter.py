@@ -1,6 +1,11 @@
 import unittest
 
+from ewm.ir.environment import build_environment_ir_from_mcp_schema, reachable_information
+from ewm.ir.state import ExecutionState
+from ewm.mcp.client import MCPCall
+from ewm.mcp.normalizer import normalize_observation, to_observation
 from ewm.mcp.salesforce_read_adapter import SalesforceReadMCPAdapter
+from ewm.mcp.salesforce_reads import SalesforceReadsClient
 
 
 class FakeSObject:
@@ -151,6 +156,42 @@ class SalesforceReadMCPAdapterTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertIn("FROM Contact WHERE AccountId = '001000000000001AAA'", self.connector.sf.queries[-1])
         self.assertEqual(result["relationship"]["childSObject"], "Contact")
+
+    def test_salesforce_reads_client_executes_and_normalizes_observations(self):
+        client = SalesforceReadsClient(self.adapter)
+        observation = client.soql_query("SELECT Id, Name FROM Contact LIMIT 1")
+        self.assertTrue(observation.ok)
+        self.assertEqual(observation.payload["records"][0]["Name"], "Ada Lovelace")
+
+        stored_observation = to_observation(MCPCall("soqlQuery", {"query": "SELECT Id, Name FROM Contact LIMIT 1"}), observation)
+        self.assertTrue(stored_observation.ok)
+
+        evidence = normalize_observation(
+            MCPCall("soqlQuery", {"query": "SELECT Id, Name FROM Contact LIMIT 1"}),
+            observation,
+        )
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].source_tool, "soqlQuery")
+        self.assertEqual(evidence[0].source_object, "Contact")
+        self.assertEqual(evidence[0].record_id, "003000000000001AAA")
+
+    def test_build_environment_ir_from_mcp_schema(self):
+        client = SalesforceReadsClient(self.adapter)
+        env_ir = build_environment_ir_from_mcp_schema(client)
+
+        self.assertIn("Account", env_ir.object_names())
+        self.assertTrue(env_ir.get_object("Account").has_field("Name"))
+        self.assertIn("getRelatedRecords", env_ir.tool_names())
+
+        state = ExecutionState()
+        state.resolved["entities"].append({"object": "Account", "id": "001000000000001AAA"})
+        reachable = reachable_information(state, env_ir)
+        relationship_targets = {
+            (item.object_name, item.relationship_path, item.source_entity_id)
+            for item in reachable
+            if item.action == "traverse_relationship"
+        }
+        self.assertIn(("Contact", "Contacts", "001000000000001AAA"), relationship_targets)
 
 
 if __name__ == "__main__":

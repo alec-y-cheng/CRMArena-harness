@@ -36,7 +36,7 @@ class NEDExtraction:
         exact_purchase_date: str = "",
         attributes: Optional[List[str]] = None,
         clarification_needed: bool = False,
-        missing_information: Optional[List[str]] = None,
+        clarification_requirements: Optional[List[str]] = None,
     ):
         self.entity_phrase = entity_phrase
         self.product_terms = product_terms or []
@@ -46,7 +46,7 @@ class NEDExtraction:
         self.exact_purchase_date = exact_purchase_date
         self.attributes = attributes or []
         self.clarification_needed = clarification_needed
-        self.missing_information = missing_information or []
+        self.clarification_requirements = clarification_requirements or []
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -58,7 +58,7 @@ class NEDExtraction:
             "exact_purchase_date": self.exact_purchase_date,
             "attributes": list(self.attributes),
             "clarification_needed": self.clarification_needed,
-            "missing_information": list(self.missing_information),
+            "clarification_requirements": list(self.clarification_requirements),
         }
 
 
@@ -71,13 +71,13 @@ class NEDCandidateSelection:
         evidence: str = "",
         confidence: str = "unknown",
         ambiguous: bool = False,
-        missing_information: Optional[List[str]] = None,
+        clarification_requirements: Optional[List[str]] = None,
     ):
         self.selected_product_id = selected_product_id
         self.evidence = evidence
         self.confidence = confidence
         self.ambiguous = ambiguous
-        self.missing_information = missing_information or []
+        self.clarification_requirements = clarification_requirements or []
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -85,7 +85,7 @@ class NEDCandidateSelection:
             "evidence": self.evidence,
             "confidence": self.confidence,
             "ambiguous": self.ambiguous,
-            "missing_information": list(self.missing_information),
+            "clarification_requirements": list(self.clarification_requirements),
         }
 
 
@@ -164,7 +164,7 @@ Return JSON with exactly these keys:
   "exact_purchase_date": "",
   "attributes": ["visible product attributes if any"],
   "clarification_needed": false,
-  "missing_information": []
+  "clarification_requirements": []
 }}
 """.format(
         today=today.strip(),
@@ -307,7 +307,7 @@ Return JSON with exactly these keys:
   "evidence": "short explanation grounded in purchase and product records",
   "confidence": "high|medium|low|unknown",
   "ambiguous": false,
-  "missing_information": []
+  "clarification_requirements": []
 }}
 """.format(
         extraction=json.dumps(extraction.as_dict(), sort_keys=True),
@@ -319,7 +319,7 @@ Return JSON with exactly these keys:
 
 def render_ned_clarification_prompt(
     extraction: NEDExtraction,
-    missing_information: List[str],
+    clarification_requirements: List[str],
     conversation_text: str,
 ) -> str:
     """Build prompt for one natural clarification question."""
@@ -335,7 +335,7 @@ Current extracted slots:
 {extraction}
 
 Missing information:
-{missing_information}
+{clarification_requirements}
 
 Conversation so far:
 {conversation_text}
@@ -346,7 +346,7 @@ Return JSON with exactly this key:
 }}
 """.format(
         extraction=json.dumps(extraction.as_dict(), sort_keys=True),
-        missing_information=json.dumps(missing_information),
+        clarification_requirements=json.dumps(clarification_requirements),
         conversation_text=conversation_text.strip(),
     )
 
@@ -357,9 +357,9 @@ def render_ned_response(selection: NEDCandidateSelection) -> str:
     return product_id if product_id and product_id.lower() != "none" else "None"
 
 
-def respond_to_user(missing_information: List[str]) -> str:
+def respond_to_user(clarification_requirements: List[str]) -> str:
     """Render one clarification question for NED."""
-    missing = ", ".join(item for item in missing_information if item)
+    missing = ", ".join(item for item in clarification_requirements if item)
     if missing:
         return "Could you clarify {} so I can find the exact purchased product?".format(missing)
     return "Could you clarify which product and purchase timeframe you mean?"

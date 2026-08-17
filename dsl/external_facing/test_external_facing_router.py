@@ -33,7 +33,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "public",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": [],
               "threat_confidence": "low",
               "candidate_route": "knowledge_qa",
@@ -61,7 +61,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "current_customer",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": [],
               "threat_confidence": "low",
               "candidate_route": "named_entity_disambiguation",
@@ -84,7 +84,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               "evidence_required": [],
               "subject_scope": "unknown",
               "clarification_needed": true,
-              "missing_information": ["routing ambiguity"],
+              "clarification_requirements": ["routing ambiguity"],
               "disallowed_information": [],
               "threat_confidence": "low",
               "candidate_route": "knowledge_qa",
@@ -110,7 +110,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   ],
                   "subject_scope": "public",
                   "clarification_needed": false,
-                  "missing_information": [],
+                  "clarification_requirements": [],
                   "disallowed_information": ["confidential_company_knowledge"],
                   "threat_confidence": "low",
                   "candidate_route": "knowledge_qa",
@@ -119,7 +119,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
                 """
             )
 
-    def test_parse_clarify_requires_missing_information(self):
+    def test_parse_clarify_requires_clarification_requirements(self):
         with self.assertRaises(ExternalFacingParseError):
             parse_external_request_route_json(
                 """
@@ -130,7 +130,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   "evidence_required": [],
                   "subject_scope": "unknown",
                   "clarification_needed": true,
-                  "missing_information": [],
+                  "clarification_requirements": [],
                   "disallowed_information": [],
                   "threat_confidence": "low",
                   "candidate_route": null,
@@ -151,7 +151,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "internal_company",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": [],
               "threat_confidence": "high",
               "candidate_route": null,
@@ -175,7 +175,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   "evidence_required": [],
                   "subject_scope": "public",
                   "clarification_needed": false,
-                  "missing_information": [],
+                  "clarification_requirements": [],
                   "disallowed_information": [],
                   "threat_confidence": "high",
                   "candidate_route": null,
@@ -295,7 +295,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
             ],
             subject_scope="current_customer",
             clarification_needed=True,
-            missing_information=["customer_identifier", "order_reference"],
+            clarification_requirements=["customer_identifier", "order_reference"],
         )
 
         self.assertTrue(should_fallback_to_ned_from_clarify(route))
@@ -314,7 +314,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
                   ],
                   "subject_scope": "public",
                   "clarification_needed": false,
-                  "missing_information": [],
+                  "clarification_requirements": [],
                   "disallowed_information": [],
                   "threat_confidence": "low",
                   "candidate_route": "knowledge_qa",
@@ -345,7 +345,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "internal_company",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": ["internal_commercial_policy"],
               "threat_confidence": "low",
               "candidate_route": "knowledge_qa",
@@ -374,7 +374,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "other_customer",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": ["other_customer_purchase_history"],
               "threat_confidence": "high",
               "candidate_route": null,
@@ -404,7 +404,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "public",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": [],
               "reason": "public product question"
             }
@@ -426,7 +426,7 @@ class ExternalFacingRouterTests(unittest.TestCase):
               ],
               "subject_scope": "other_customer",
               "clarification_needed": false,
-              "missing_information": [],
+              "clarification_requirements": [],
               "disallowed_information": ["other_customer_profile"],
               "reason": "clearly asks for another customer's profile"
             }

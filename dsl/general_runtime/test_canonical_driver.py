@@ -79,7 +79,7 @@ class CannedCanonicalModel:
                             "reason": "return policy question",
                         }
                     ],
-                    "missing_information": [],
+                    "clarification_requirements": [],
                 }
             )
         if "answer_candidate" in prompt and "Retrieved evidence items" in prompt:
@@ -98,7 +98,7 @@ class CannedCanonicalModel:
                                 "reason": "public return policy",
                             }
                         ],
-                        "missing_information": [],
+                        "clarification_requirements": [],
                     }
                 }
             )
@@ -136,7 +136,7 @@ class MissingInfoKQAModel(CannedCanonicalModel):
                             "reason": "return policy question",
                         }
                     ],
-                    "missing_information": ["order_id", "purchase_date"],
+                    "clarification_requirements": ["order_id", "purchase_date"],
                 }
             )
         return super().__call__(messages)
@@ -180,7 +180,7 @@ class CannedCanonicalNEDModel:
                             "reason": "need product name/description",
                         },
                     ],
-                    "missing_information": [],
+                    "clarification_requirements": [],
                 }
             )
         if "answer_candidate" in prompt and "Retrieved evidence items" in prompt:
@@ -206,7 +206,7 @@ class CannedCanonicalNEDModel:
                                 "reason": "public product catalog match",
                             },
                         ],
-                        "missing_information": [],
+                        "clarification_requirements": [],
                     }
                 }
             )
@@ -252,7 +252,7 @@ class AdvisoryMissingNEDModel(CannedCanonicalNEDModel):
                             "reason": "need customer's matching purchase",
                         }
                     ],
-                    "missing_information": ["specific SKU", "order number"],
+                    "clarification_requirements": ["specific SKU", "order number"],
                 }
             )
         return super().__call__(messages)
@@ -287,7 +287,7 @@ class UngroundedDateWindowNEDModel(CannedCanonicalNEDModel):
                             "reason": "need customer's matching purchase",
                         }
                     ],
-                    "missing_information": [],
+                    "clarification_requirements": [],
                 }
             )
         return super().__call__(messages)
@@ -315,7 +315,7 @@ class InconsistentNoneNEDModel(CannedCanonicalNEDModel):
                         }
                     ],
                     "required_evidence_instances": [],
-                    "missing_information": [],
+                    "clarification_requirements": [],
                 }
             )
         if "answer_candidate" in prompt and "Retrieved evidence items" in prompt:
@@ -334,7 +334,7 @@ class InconsistentNoneNEDModel(CannedCanonicalNEDModel):
                                 "reason": "This purchase record links to Product2Id 01t000000000001AAA, the only product that matches the requested item.",
                             }
                         ],
-                        "missing_information": [],
+                        "clarification_requirements": [],
                     }
                 }
             )
@@ -368,7 +368,7 @@ class CanonicalGeneralRuntimeDriverTests(unittest.TestCase):
         self.assertEqual(result.info["general_runtime_state"]["answer_candidate"]["confidence"], "high")
         self.assertEqual(len(model.calls), 3)
 
-    def test_canonical_kqa_ignores_advisory_missing_information(self):
+    def test_canonical_kqa_ignores_advisory_clarification_requirements(self):
         model = MissingInfoKQAModel()
         env = FakeKnowledgeEnv()
         driver = CanonicalGeneralRuntimeDriver("external_knowledge_qa", model, max_extraction_retries=0)
@@ -382,7 +382,7 @@ class CanonicalGeneralRuntimeDriverTests(unittest.TestCase):
         self.assertEqual(result.info["end_reason"]["content"], "Items can be returned within 30 days of purchase.")
         self.assertFalse(any(action["name"] == "respond" and "Could you clarify" in action["content"] for action in env.actions))
         frame = result.info["general_runtime_state"]["instance_frame"]
-        self.assertEqual(frame["missing_information"], [])
+        self.assertEqual(frame["clarification_requirements"], [])
 
     def test_canonical_ned_driver_runs_from_spec(self):
         model = CannedCanonicalNEDModel()
@@ -403,7 +403,7 @@ class CanonicalGeneralRuntimeDriverTests(unittest.TestCase):
         self.assertIn("filtered", order_item["__symbolic_context"]["date_window_guarantee"])
         self.assertEqual(len(model.calls), 3)
 
-    def test_canonical_ned_ignores_advisory_missing_information_when_required_fields_exist(self):
+    def test_canonical_ned_ignores_advisory_clarification_requirements_when_required_fields_exist(self):
         model = AdvisoryMissingNEDModel()
         env = FakeCustomerProductEnv()
         driver = CanonicalGeneralRuntimeDriver("external_named_entity_disambiguation", model, max_extraction_retries=0)
@@ -417,7 +417,7 @@ class CanonicalGeneralRuntimeDriverTests(unittest.TestCase):
         self.assertEqual(result.info["end_reason"]["content"], "01t000000000001AAA")
         self.assertFalse(any(action["name"] == "respond" and "Could you clarify" in action["content"] for action in env.actions))
         frame = result.info["general_runtime_state"]["instance_frame"]
-        self.assertEqual(frame["missing_information"], [])
+        self.assertEqual(frame["clarification_requirements"], [])
 
     def test_canonical_ned_rejects_ungrounded_date_window(self):
         model = UngroundedDateWindowNEDModel()

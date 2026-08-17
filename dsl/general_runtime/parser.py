@@ -15,7 +15,7 @@ class RuntimeParseError(ValueError):
 
 def parse_instance_frame_json(text: str) -> InstanceFrame:
     data = _normalize_instance_frame_data(_loads_object(text))
-    _require_keys(data, ["workflow_id", "request_summary", "target_entities", "required_evidence_instances", "missing_information"])
+    _require_keys(data, ["workflow_id", "request_summary", "target_entities", "required_evidence_instances", "clarification_requirements"])
     return InstanceFrame(
         workflow_id=_as_string(data["workflow_id"], "workflow_id"),
         request_summary=_as_string(data["request_summary"], "request_summary"),
@@ -24,7 +24,7 @@ def parse_instance_frame_json(text: str) -> InstanceFrame:
         product_terms=_loose_string_list(data.get("product_terms", []), "product_terms"),
         constraints=_loose_object_list(data.get("constraints", []), "constraints"),
         required_evidence_instances=_evidence_instances(data["required_evidence_instances"]),
-        missing_information=_loose_string_list(data["missing_information"], "missing_information"),
+        clarification_requirements=_loose_string_list(data["clarification_requirements"], "clarification_requirements"),
     )
 
 
@@ -45,7 +45,7 @@ def parse_answer_candidate_json(text: str, state) -> Dict[str, Any]:
     candidate = _decode_json_string(data["answer_candidate"])
     if not isinstance(candidate, dict):
         raise RuntimeParseError("answer_candidate must be an object")
-    _require_keys(candidate, ["answer", "confidence", "evidence", "selected_evidence", "missing_information"])
+    _require_keys(candidate, ["answer", "confidence", "evidence", "selected_evidence", "clarification_requirements"])
     answer = candidate.get("answer")
     if answer is None:
         answer = "None"
@@ -55,13 +55,13 @@ def parse_answer_candidate_json(text: str, state) -> Dict[str, Any]:
     if confidence not in ("high", "medium", "low", "unknown"):
         raise RuntimeParseError("Invalid confidence: {}".format(confidence))
     selected_evidence = _selected_evidence(candidate["selected_evidence"], state)
-    missing_information = _string_list(candidate["missing_information"], "missing_information")
+    clarification_requirements = _string_list(candidate["clarification_requirements"], "clarification_requirements")
     parsed = {
         "answer": answer.strip() or "None",
         "confidence": confidence,
         "evidence": _as_string(candidate["evidence"], "evidence"),
         "selected_evidence": selected_evidence,
-        "missing_information": missing_information,
+        "clarification_requirements": clarification_requirements,
     }
     for key, value in candidate.items():
         if key not in parsed:
@@ -226,8 +226,8 @@ def _normalize_instance_frame_data(data: Dict[str, Any]) -> Dict[str, Any]:
         required_evidence_instances if isinstance(required_evidence_instances, list) else []
     )
 
-    missing_information = _decode_json_string(first_value("missing_information", "missing_fields"))
-    normalized["missing_information"] = missing_information if missing_information is not None else []
+    clarification_requirements = _decode_json_string(first_value("clarification_requirements", "missing_fields"))
+    normalized["clarification_requirements"] = clarification_requirements if clarification_requirements is not None else []
     return normalized
 
 

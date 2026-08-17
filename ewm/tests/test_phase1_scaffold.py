@@ -12,6 +12,7 @@ from ewm.ir import (
     ResponseContract,
 )
 from ewm.mcp.client import MCPCall, MCPObservation, MCPToolSchema, ValidationResult
+from ewm.runtime.action_selector import WorkflowDecision
 from ewm.runtime.verifier import validate_mcp_call
 
 
@@ -49,6 +50,27 @@ class Phase1ScaffoldTests(unittest.TestCase):
 
         self.assertEqual(observation.to_dict()["call"]["name"], "find")
         self.assertEqual(result.to_dict()["valid"], True)
+
+    def test_workflow_decision_serializes_backend_frontend_and_complete(self):
+        backend_decision = WorkflowDecision(
+            "backend_action",
+            backend_action=MCPCall("soqlQuery", {"query": "SELECT Id FROM Account LIMIT 1"}),
+            reason="need records",
+        )
+        frontend_decision = WorkflowDecision(
+            "frontend_action",
+            frontend_message="Which account should I inspect?",
+            reason="target account is ambiguous",
+        )
+        complete_decision = WorkflowDecision(
+            "complete",
+            candidate_outcome={"supported": True},
+            candidate_response="Done",
+        )
+
+        self.assertEqual(backend_decision.to_dict()["backend_action"]["name"], "soqlQuery")
+        self.assertEqual(frontend_decision.to_dict()["frontend_message"], "Which account should I inspect?")
+        self.assertEqual(complete_decision.to_dict()["candidate_response"], "Done")
 
 
 if __name__ == "__main__":

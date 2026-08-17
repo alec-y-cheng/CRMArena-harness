@@ -128,7 +128,7 @@ class KnowledgeQADSLTests(unittest.TestCase):
             "search_terms": ["InnovateMax security features"],
             "product_terms": ["InnovateMax"],
             "clarification_needed": False,
-            "missing_information": [],
+            "clarification_requirements": [],
         }))
         self.assertEqual(parsed.normalized_question, "What security features does InnovateMax provide?")
         self.assertEqual(parsed.search_terms, ["InnovateMax security features"])

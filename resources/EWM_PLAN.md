@@ -4,15 +4,16 @@
 
 The next EWM version should move away from benchmark-specific symbolic
 workflows and toward a reusable enterprise runtime. The immediate target is a
-read-first Salesforce architecture where:
+Salesforce-backed workflow architecture where the first connected tool surface
+is read-only:
 
 - the LLM infers what must be done for the current request;
 - the symbolic layer validates and constrains how information is acquired;
 - Salesforce MCP provides the execution tool space;
 - the runtime stores evidence, provenance, privacy decisions, and completion
   state;
-- write operations and next-state prediction are deferred until the read system
-  is working.
+- write-capable tools and next-state prediction are deferred until the generic
+  workflow loop is working.
 
 The central claim should be:
 
@@ -22,24 +23,24 @@ The central claim should be:
 > disclosed.
 
 This version should not hand-author task-family WorkflowSpecs for the near-term
-read path. It should also avoid deterministic code paths that encode BANT, KQA,
+workflow path. It should also avoid deterministic code paths that encode BANT, KQA,
 NED, WSR, PVI, or other CRMArena task families as fixed algorithms. The runtime
 should provide generic mechanics; the model should infer task requirements from
 the prompt and conversation.
 
-## Immediate Read-Based Architecture
+## Immediate Workflow Architecture
 
-The read-side runtime should follow this loop:
+The generic runtime should follow this loop:
 
 ```text
 user request
   -> LLM-inferred InstanceFrame
   -> EnvironmentIR / reachable information
-  -> LLM selects MCP read action from available tool space
-  -> runtime validates action against schema and inferred constraints
-  -> Salesforce SObject Reads MCP executes
-  -> observation normalized into ExecutionState
-  -> evidence / disclosure / completion verifier
+  -> LLM proposes workflow decision: backend_action | frontend_action | complete
+  -> if backend_action: runtime validates action and configured backend executes
+  -> if frontend_action: runtime records user-facing loop action
+  -> if complete: runtime runs completion/verifier stack on candidate outcome/response
+  -> observations/evidence/candidates update ExecutionState
   -> respond, clarify, refuse, or continue
 ```
 
@@ -50,7 +51,7 @@ the selected MCP call is schema-valid, compatible with inferred constraints,
 and safe to execute.
 
 Salesforce SObject Reads MCP should be the immediate execution backend for this
-read path. It is acceptable for MCP tools to expose schema discovery, SOQL
+workflow path. It is acceptable for the first MCP tools to expose schema discovery, SOQL
 query, SOSL search, relationship traversal, and user context. However, MCP does
 not itself maintain EWM state. The EWM still needs a thin client/normalizer
 around MCP to standardize calls, errors, observations, provenance, and
@@ -74,7 +75,7 @@ constraints
 evidence_requirements
 outcome_contract
 response_contract
-missing_information
+clarification_requirements
 ```
 
 The LLM is responsible for inferring these fields from the user-visible prompt,
@@ -95,13 +96,13 @@ privacy-aware prompt, system context, actor metadata, and user request; the
 runtime validates proposed retrievals and responses against the inferred
 constraints and evidence provenance.
 
-`evidence_requirements` and `missing_information` are different:
+`evidence_requirements` and `clarification_requirements` are different:
 
 - `evidence_requirements` describe what the system must retrieve or verify from
   the environment to answer safely, such as a public policy article, a current
   customer's order history, a target Account record, or related Opportunity
   context.
-- `missing_information` describes user-held or prompt-missing details needed to
+- `clarification_requirements` describes user-held or prompt-missing details needed to
   proceed, such as which customer, which product, which timeframe, or which
   record reference.
 
@@ -185,9 +186,9 @@ The grouping is intentional:
 
 ### EnvironmentIR
 
-`EnvironmentIR` represents what can be known or reached in the enterprise
-environment. For read tasks, it should focus on information reachability rather
-than workflow-specific control flow.
+`EnvironmentIR` represents what can be known, reached, or eventually changed in
+the enterprise environment. For the first Salesforce SObject Reads backend, it
+focuses on information reachability rather than write-side state transitions.
 
 It should contain:
 
@@ -339,7 +340,7 @@ respond, or stop because a verifier blocked the current path. If the outcome is
 not supported, the default should be to continue with another validated action
 when one is available, not to immediately return `None`.
 
-For read tasks:
+For information-returning workflows:
 
 ```text
 outcome_contract = answer supported by evidence
@@ -377,7 +378,7 @@ ewm/
 
   runtime/
     __init__.py
-    read_driver.py
+    workflow_driver.py
     action_selector.py
     verifier.py
     privacy.py
@@ -401,7 +402,7 @@ ewm/
 The existing `dsl/general_runtime/` implementation can remain as a reference
 and benchmark harness while this new architecture is built. The new `ewm/`
 package should not depend on hand-authored task-family WorkflowSpecs for the
-read path.
+workflow path.
 
 ## Initial Function Stubs
 
@@ -419,12 +420,12 @@ def reachable_information(
     depth: int = 1,
 ) -> list[ReachableInfo]: ...
 
-def select_mcp_read_action(
+def select_workflow_decision(
     frame: InstanceFrame,
     state: ExecutionState,
     reachable: list[ReachableInfo],
     tools: list[MCPToolSchema],
-) -> MCPCall: ...
+) -> WorkflowDecision: ...
 
 def validate_mcp_call(
     call: MCPCall,
@@ -510,7 +511,7 @@ official Salesforce Hosted MCP `platform/sobject-reads` server. Hosted MCP
 requires org-level activation and an External Client App for OAuth
 authentication, so the public benchmark API credentials alone are not
 sufficient to enable the hosted server. While waiting for that access, the
-read-side EWM should not be blocked on Hosted MCP configuration.
+EWM workflow runtime should not be blocked on Hosted MCP configuration.
 
 Instead, implement a local MCP-compatible Salesforce read adapter backed by
 the Salesforce API credentials already provided by CRMArena. The goal is not
@@ -554,7 +555,7 @@ responsibilities:
 ```text
 LLM / EWM
     |
-    | chooses a generic read action
+    | chooses a generic action from the currently exposed tool surface
     v
 Local Salesforce MCP Adapter
     |
@@ -604,7 +605,7 @@ Salesforce**. Connecting it to another Salesforce org should require different
 credentials, not changes to the tool implementation. On connection, schema
 discovery should determine what objects and relationships exist in that org.
 
-This also provides the input for the read-side `EnvironmentIR`.
+This also provides the input for `EnvironmentIR`.
 `getObjectSchema` or the corresponding Salesforce Describe APIs can be used to
 construct the complete schema and relationship graph. Given the entities
 currently resolved in `ExecutionState`, the EWM can then derive a local
@@ -630,12 +631,13 @@ EnvironmentIR
 LLM chooses which direction is relevant to the goal
 ```
 
-This is intentionally not a read WorkflowSpec. The symbolic layer models the
+This is intentionally not a task WorkflowSpec. The symbolic layer models the
 space of reachable observations, while the LLM performs the task-specific
-reasoning required to choose among them. In this sense, the read-side symbolic
-model is analogous to the write-side workflow graph: write workflows expose
-reachable environment-state consequences, while the read representation
-exposes reachable knowledge-state transitions.
+reasoning required to choose among them. In this sense, the current
+SObject-Reads-backed model is analogous to the future write-side workflow
+graph: write-capable tools expose reachable environment-state consequences,
+while the current read-only tool surface exposes reachable knowledge-state
+transitions.
 
 The local MCP adapter should be treated as a temporary backend implementation,
 not as a different EWM architecture. The EWM runtime should depend on a
@@ -646,7 +648,7 @@ Salesforce Hosted MCP without changing `InstanceFrame`, `ExecutionState`,
 ```text
                          EWM Runtime
                               |
-                       MCP Read Interface
+                       MCP / Action Interface
                               |
                   +-----------+-----------+
                   |                       |
@@ -687,7 +689,7 @@ Acceptance criteria for Phase 0.5:
 * the EWM runtime does not depend on whether the backend is the local adapter
   or Salesforce Hosted MCP;
 * `getObjectSchema`/schema discovery provides the initial source for building
-  the read-side `EnvironmentIR`;
+  `EnvironmentIR`;
 * once official Hosted MCP access is available, the local and hosted
   implementations can be compared for interface and behavioral compatibility.
 
@@ -714,7 +716,7 @@ Initial artifacts:
 - `ewm/mcp/` for generic MCP calls, observations, validation results, the
   Salesforce read adapter, read-client wrapper, observation normalizer, and
   deferred mutation placeholder;
-- `ewm/runtime/` for generic read-driver, action-selection, verifier,
+- `ewm/runtime/` for generic workflow-driver, action-selection, verifier,
   disclosure, completion, and rendering stubs;
 - `ewm/mining/` for future schema, relationship, exhaust, and workflow-prior
   mining hooks;
@@ -764,25 +766,28 @@ The reachability layer should:
 - expose searchable objects when direct object choice is uncertain;
 - avoid implying task-specific mandatory paths.
 
-### Phase 5: Generic read driver
+### Phase 5: Generic workflow driver
 
-Implement the main read loop:
+Implement the main workflow loop:
 
 ```text
 infer InstanceFrame
 build/update reachable information
-ask LLM to select an MCP read action
-validate action
-execute MCP call
-normalize observation
+ask LLM to propose workflow decision
+if decision=backend_action: validate action, execute MCP/action, normalize observation
+if decision=frontend_action: update loop state for user-facing interaction
+if decision=complete: verify candidate outcome and response
 update ExecutionState
 extract evidence-backed claims
-evaluate completion
 respond / clarify / refuse / continue
 ```
 
 The LLM should choose among MCP tools and reachable information, but the runtime
-must validate the call before execution.
+must validate calls before execution. The heavier completion, disclosure, and
+outcome/response verifiers should run when the controller proposes a completion
+candidate, not after every action step. Refusals, blocked paths, success
+confirmations, and ordinary answers should all be represented as candidate
+outcomes/responses under `complete`, not as separate driver-level action types.
 
 ### Phase 6: Verifiers
 
@@ -797,7 +802,7 @@ Implement generic verifiers:
 - response contract;
 - completion state.
 
-These verifiers should be reusable across read tasks and should not encode
+These verifiers should be reusable across workflow types and should not encode
 benchmark answers or task-specific branch logic.
 
 ### Phase 7: Matched MCP baselines
@@ -814,7 +819,7 @@ runtime, because both systems use the same Salesforce execution substrate.
 
 ### Phase 8: Mining-based workflow priors
 
-After the generic read loop works, add mining modules that can propose reusable
+After the generic workflow loop works, add mining modules that can propose reusable
 workflow priors from schema, logs, successful traces, and enterprise exhaust.
 
 The output should be suggestions such as:
@@ -833,7 +838,7 @@ data rather than hand-authored benchmark algorithms.
 
 ### Phase 9: Write-side dynamics later
 
-Develop write support only after the read path is stable.
+Develop write-capable tool support only after the generic workflow loop is stable.
 
 Use a separate Salesforce Developer Edition, scratch org, or sandbox. Do not
 mutate the CRMArena benchmark org.
@@ -857,7 +862,7 @@ targets, not LLM-generated labels.
 - MCP is the execution interface, but not the whole EWM. EWM still adds state,
   provenance, validation, disclosure control, completion, outcome control, and
   response control.
-- Avoid hand-authored benchmark WorkflowSpecs in the new read path.
+- Avoid hand-authored benchmark WorkflowSpecs in the new workflow path.
 - Avoid deterministic task-family solvers for benchmark tasks.
 - Let the LLM infer task requirements, evidence needs, outcome contract, and
   response contract per instance.
@@ -867,7 +872,7 @@ targets, not LLM-generated labels.
 - Do not trigger disclosure checks from benchmark task labels. Use actor
   metadata, inferred constraints, selected/cited evidence from collected state,
   and candidate response.
-- Expect the first generic read version to lose some benchmark-specific
+- Expect the first generic workflow version to lose some benchmark-specific
   performance relative to the handcrafted DSL, but gain a much stronger
   generalization story.
 - Do not claim learned next-state prediction for read-only CRMArena tasks.

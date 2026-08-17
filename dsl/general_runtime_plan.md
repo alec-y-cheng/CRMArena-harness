@@ -189,7 +189,7 @@ Example for external KQA:
       "reason": "return eligibility is governed by public return policy"
     }
   ],
-  "missing_information": []
+  "clarification_requirements": []
 }
 ```
 

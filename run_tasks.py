@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import json, os
-from crm_sandbox.agents import ChatAgent, ChatAgentDSL, ChatAgentGeneralRuntimeDSL, ToolCallAgent
+from crm_sandbox.agents import ChatAgent, ChatAgentDSL, ChatAgentEWM, ChatAgentGeneralRuntimeDSL, ToolCallAgent
 from crm_sandbox.agents.utils import BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP
 from crm_sandbox.data.assets import TASKS_ORIGINAL, SCHEMA_ORIGINAL, TASKS_B2B, TASKS_B2B_INTERACTIVE, TASKS_B2C, TASKS_B2C_INTERACTIVE, B2B_SCHEMA, B2C_SCHEMA, EXTERNAL_FACING_TASKS
 from crm_sandbox.env.env import ChatEnv, ToolEnv, InteractiveChatEnv
@@ -211,7 +211,7 @@ def run():
     print(f"Starting evaluation at {start_time}")
     selected_tasks = {t['idx']: t for t in selected_tasks}
     
-    if args.agent_strategy in ["act", "react", "lead_dsl", "general_dsl"]:
+    if args.agent_strategy in ["act", "react", "lead_dsl", "general_dsl", "ewm"]:
         if args.interactive:
             if args.agent_strategy == "act":
                 raise ValueError(
@@ -306,18 +306,20 @@ def run():
                 f"scaffold_source={scaffold_source}",
                 f"evidence={routing_result.evidence}",
             )
-        if args.agent_strategy in ["react", "lead_dsl", "general_dsl"]:
+        if args.agent_strategy in ["react", "lead_dsl", "general_dsl", "ewm"]:
             agent_cls = ChatAgent
             if args.agent_strategy == "lead_dsl":
                 agent_cls = ChatAgentDSL
             elif args.agent_strategy == "general_dsl":
                 agent_cls = ChatAgentGeneralRuntimeDSL
+            elif args.agent_strategy == "ewm":
+                agent_cls = ChatAgentEWM
             agent = agent_cls(
                 model=agent_model,
                 schema_obj=SCHEMA,
                 eval_mode=args.agent_eval_mode,
                 max_turns=args.max_turns,
-                strategy="react" if args.agent_strategy in ["lead_dsl", "general_dsl"] else args.agent_strategy,
+                strategy="react" if args.agent_strategy in ["lead_dsl", "general_dsl", "ewm"] else args.agent_strategy,
                 provider=args.llm_provider,
                 interactive=args.interactive,
                 agent_type=agent_type,
@@ -419,7 +421,7 @@ if __name__ == "__main__":
         "--agent_strategy",
         type=str,
         default="react",
-        choices=["tool_call", "act", "react", "lead_dsl", "general_dsl", "tool_call_flex"],
+        choices=["tool_call", "act", "react", "lead_dsl", "general_dsl", "ewm", "tool_call_flex"],
     )
     parser.add_argument(
         "--agent_eval_mode",

@@ -43,7 +43,7 @@ class WorkflowSpec:
 
 
 class InstanceFrame:
-    def __init__(self, workflow_id: str = "", request_summary: str = "", target_entities: Optional[List[Dict[str, Any]]] = None, query_terms: Optional[List[str]] = None, product_terms: Optional[List[str]] = None, constraints: Optional[List[Dict[str, Any]]] = None, required_evidence_instances: Optional[List[Dict[str, Any]]] = None, missing_information: Optional[List[str]] = None):
+    def __init__(self, workflow_id: str = "", request_summary: str = "", target_entities: Optional[List[Dict[str, Any]]] = None, query_terms: Optional[List[str]] = None, product_terms: Optional[List[str]] = None, constraints: Optional[List[Dict[str, Any]]] = None, required_evidence_instances: Optional[List[Dict[str, Any]]] = None, clarification_requirements: Optional[List[str]] = None):
         self.workflow_id = workflow_id
         self.request_summary = request_summary
         self.target_entities = target_entities or []
@@ -51,7 +51,7 @@ class InstanceFrame:
         self.product_terms = product_terms or []
         self.constraints = constraints or []
         self.required_evidence_instances = required_evidence_instances or []
-        self.missing_information = missing_information or []
+        self.clarification_requirements = clarification_requirements or []
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -62,7 +62,7 @@ class InstanceFrame:
             "product_terms": list(self.product_terms),
             "constraints": [dict(item) for item in self.constraints],
             "required_evidence_instances": [dict(item) for item in self.required_evidence_instances],
-            "missing_information": list(self.missing_information),
+            "clarification_requirements": list(self.clarification_requirements),
         }
 
 

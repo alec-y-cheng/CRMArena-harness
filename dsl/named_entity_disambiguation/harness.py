@@ -183,7 +183,7 @@ class NamedEntityDisambiguationDSLDriver:
                         conversation_text,
                         messages,
                         info,
-                        missing_information=state.selection.missing_information,
+                        clarification_requirements=state.selection.clarification_requirements,
                     )
                     result = self._respond(env, messages, info, question)
                     if result.done:
@@ -278,7 +278,7 @@ class NamedEntityDisambiguationDSLDriver:
                             "Invalid NED slot JSON: {}. Retry with exactly one JSON "
                             "object and no prose. Include entity_phrase, product_terms, "
                             "date_expression, period, interval_count, exact_purchase_date, "
-                            "attributes, clarification_needed, and missing_information."
+                            "attributes, clarification_needed, and clarification_requirements."
                         ).format(last_error),
                     }
                 )
@@ -528,12 +528,12 @@ class NamedEntityDisambiguationDSLDriver:
         conversation_text: str,
         messages: List[Dict[str, str]],
         info: Dict[str, Any],
-        missing_information: Optional[List[str]] = None,
+        clarification_requirements: Optional[List[str]] = None,
     ) -> str:
         """Use the extractor model to phrase one clarification question."""
-        missing = missing_information
+        missing = clarification_requirements
         if missing is None and state.extraction:
-            missing = state.extraction.missing_information
+            missing = state.extraction.clarification_requirements
         missing = missing or []
         if not state.extraction:
             return respond_to_user(missing)
@@ -710,7 +710,7 @@ def _apply_required_slot_checks(state: NamedEntityDisambiguationState) -> None:
     extraction = state.extraction
     if extraction is None:
         return
-    missing = list(extraction.missing_information)
+    missing = list(extraction.clarification_requirements)
     if is_generic_entity_phrase(extraction.entity_phrase) and not extraction.attributes:
         missing.append("product kind or distinguishing product attributes")
     if not state.date_window:
@@ -724,7 +724,7 @@ def _apply_required_slot_checks(state: NamedEntityDisambiguationState) -> None:
                 seen.add(cleaned)
                 deduped.append(cleaned)
         extraction.clarification_needed = True
-        extraction.missing_information = deduped
+        extraction.clarification_requirements = deduped
 
 
 def _conversation_from_messages(messages: List[Dict[str, str]]) -> str:

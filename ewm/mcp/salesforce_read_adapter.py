@@ -84,13 +84,21 @@ class SalesforceReadMCPAdapter:
             },
             {
                 "name": "find",
-                "description": "Execute a SOSL FIND search across Salesforce objects.",
+                "description": (
+                    "Execute a SOSL FIND keyword search across Salesforce objects. "
+                    "Use this for text or keyword search when the exact record ID "
+                    "or structured field filter is not known. Example: "
+                    "FIND {search terms} IN ALL FIELDS RETURNING Account(Id, Name LIMIT 10)"
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "search": {
                             "type": "string",
-                            "description": "A valid SOSL FIND search string.",
+                            "description": (
+                                "A valid SOSL FIND search string, for example: "
+                                "FIND {search terms} IN ALL FIELDS RETURNING Account(Id, Name LIMIT 10)"
+                            ),
                         }
                     },
                     "required": ["search"],

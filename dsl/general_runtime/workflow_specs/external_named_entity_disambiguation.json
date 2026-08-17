@@ -22,7 +22,7 @@
     "type": "entity_id_or_none"
   },
   "clarification_policy": {
-    "ask_when_instance_missing_information": false,
+    "ask_when_instance_clarification_requirements": false,
     "fallback_when_exhausted": "unavailable",
     "max_turns": 3
   },
@@ -43,13 +43,13 @@
       "Return None if no retrieved purchase record matches the customer product/entity description and timeframe.",
       "If exactly one purchased Product2 record materially matches the requested product class, type, or distinguishing modifiers better than the other purchased records, return that Product2.Id.",
       "Do not mark a request ambiguous merely because other purchased products share a broad category, activity, or brand-adjacent word when their product type differs from the requested item.",
-      "Set missing_information only when multiple purchased products remain genuinely ambiguous after comparing Product2 names/descriptions and the customer-visible product phrase."
+      "Set clarification_requirements only when multiple purchased products remain genuinely ambiguous after comparing Product2 names/descriptions and the customer-visible product phrase."
     ],
     "schema": {
       "answer": "Product2.Id from current-customer purchase evidence, or None",
       "confidence": "high|medium|low|unknown",
       "evidence": "brief explanation grounded in purchase records and product catalog records",
-      "missing_information": [],
+      "clarification_requirements": [],
       "selected_evidence": [
         {
           "evidence_id": "retrieved OrderItem or Product2 evidence id used for the answer",
@@ -72,7 +72,7 @@
           "type": "purchase_date_window"
         }
       ],
-      "missing_information": "product/entity detail or purchase timeframe needed before scoped retrieval is meaningful",
+      "clarification_requirements": "product/entity detail or purchase timeframe needed before scoped retrieval is meaningful",
       "product_terms": "concise product catalog search terms from the customer request",
       "target_entities": "customer product/entity references and distinguishing attributes"
     },
@@ -84,7 +84,7 @@
       "Use runtime metadata for the current customer scope; do not ask the customer for internal ids if the runtime metadata supplies them.",
       "If product/entity detail and purchase timeframe are present, do not request clarification.",
       "For purchase_date_window constraints, set is_valid_for_retrieval=false when the customer's timeframe is too broad or vague to retrieve against reliably.",
-      "If is_valid_for_retrieval=false, include purchase date or timeframe in missing_information.",
+      "If is_valid_for_retrieval=false, include purchase date or timeframe in clarification_requirements.",
       "Normalize relative purchase dates using metadata.today when present."
     ]
   },

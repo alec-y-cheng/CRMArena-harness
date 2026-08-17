@@ -121,7 +121,7 @@ object must include:
         "reason": "..."
       }}
     ],
-    "missing_information": []
+    "clarification_requirements": []
   }}
 }}
 

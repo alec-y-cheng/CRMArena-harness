@@ -42,13 +42,13 @@ class InternalWorkflowRoute:
         route: str,
         confidence: str = "unknown",
         target_record_id: str = "",
-        missing_information: Optional[List[str]] = None,
+        clarification_requirements: Optional[List[str]] = None,
         reason: str = "",
     ):
         self.route = route
         self.confidence = confidence
         self.target_record_id = target_record_id
-        self.missing_information = missing_information or []
+        self.clarification_requirements = clarification_requirements or []
         self.reason = reason
 
     def as_dict(self) -> Dict[str, Any]:
@@ -56,7 +56,7 @@ class InternalWorkflowRoute:
             "route": self.route,
             "confidence": self.confidence,
             "target_record_id": self.target_record_id,
-            "missing_information": list(self.missing_information),
+            "clarification_requirements": list(self.clarification_requirements),
             "reason": self.reason,
         }
 
@@ -117,7 +117,7 @@ Return JSON:
   "route": "wrong_stage_rectification|policy_violation_identification|clarify|unsupported",
   "confidence": "high|medium|low|unknown",
   "target_record_id": "Salesforce record Id if present, otherwise empty string",
-  "missing_information": [],
+  "clarification_requirements": [],
   "reason": "brief rationale"
 }}
 """.format(
@@ -128,18 +128,18 @@ Return JSON:
 
 def parse_internal_workflow_route_json(text: str) -> InternalWorkflowRoute:
     data = _loads_object(text)
-    _require_keys(data, ["route", "confidence", "target_record_id", "missing_information", "reason"])
+    _require_keys(data, ["route", "confidence", "target_record_id", "clarification_requirements", "reason"])
     route = _route(data["route"])
     confidence = _confidence(data["confidence"])
     target_record_id = _as_string(data["target_record_id"], "target_record_id")
-    missing_information = _string_list(data["missing_information"], "missing_information")
-    if route == "clarify" and not missing_information:
-        raise InternalRouteParseError("route clarify requires missing_information")
+    clarification_requirements = _string_list(data["clarification_requirements"], "clarification_requirements")
+    if route == "clarify" and not clarification_requirements:
+        raise InternalRouteParseError("route clarify requires clarification_requirements")
     return InternalWorkflowRoute(
         route=route,
         confidence=confidence,
         target_record_id=target_record_id,
-        missing_information=missing_information,
+        clarification_requirements=clarification_requirements,
         reason=_as_string(data["reason"], "reason"),
     )
 
@@ -167,7 +167,7 @@ def _heuristic_internal_route(task_query: str, conversation_text: str) -> Intern
             route="wrong_stage_rectification",
             confidence="medium",
             target_record_id=opportunity_id,
-            missing_information=[] if opportunity_id else ["Opportunity ID"],
+            clarification_requirements=[] if opportunity_id else ["Opportunity ID"],
             reason="Request concerns Opportunity stage verification.",
         )
     if case_id or any(term in text for term in ("case id", "policy", "breach", "violation", "knowledge article", "contravened")):
@@ -175,14 +175,14 @@ def _heuristic_internal_route(task_query: str, conversation_text: str) -> Intern
             route="policy_violation_identification",
             confidence="medium",
             target_record_id=case_id,
-            missing_information=[] if case_id else ["Case ID"],
+            clarification_requirements=[] if case_id else ["Case ID"],
             reason="Request concerns policy violation identification for a Case.",
         )
     return InternalWorkflowRoute(
         route="unsupported",
         confidence="low",
         target_record_id="",
-        missing_information=[],
+        clarification_requirements=[],
         reason="Request does not match a supported internal workflow.",
     )
 

@@ -30,7 +30,7 @@ def parse_ned_extraction_json(text: str) -> NEDExtraction:
             "exact_purchase_date",
             "attributes",
             "clarification_needed",
-            "missing_information",
+            "clarification_requirements",
         ],
     )
     return NEDExtraction(
@@ -42,7 +42,7 @@ def parse_ned_extraction_json(text: str) -> NEDExtraction:
         exact_purchase_date=_as_string(data["exact_purchase_date"], "exact_purchase_date"),
         attributes=_string_list(data["attributes"], "attributes"),
         clarification_needed=_as_bool(data["clarification_needed"], "clarification_needed"),
-        missing_information=_string_list(data["missing_information"], "missing_information"),
+        clarification_requirements=_string_list(data["clarification_requirements"], "clarification_requirements"),
     )
 
 
@@ -54,7 +54,7 @@ def parse_ned_candidate_selection_json(
     data = _loads_object(text)
     _require_keys(
         data,
-        ["selected_product_id", "evidence", "confidence", "ambiguous", "missing_information"],
+        ["selected_product_id", "evidence", "confidence", "ambiguous", "clarification_requirements"],
     )
     selected_product_id = _optional_product_id(data["selected_product_id"])
     allowed = set(allowed_product_ids)
@@ -65,7 +65,7 @@ def parse_ned_candidate_selection_json(
             )
         )
     ambiguous = _as_bool(data["ambiguous"], "ambiguous")
-    missing_information = _string_list(data["missing_information"], "missing_information")
+    clarification_requirements = _string_list(data["clarification_requirements"], "clarification_requirements")
     if ambiguous and selected_product_id:
         raise NamedEntityDisambiguationParseError(
             "selected_product_id must be null when ambiguous is true"
@@ -75,7 +75,7 @@ def parse_ned_candidate_selection_json(
         evidence=_as_string(data["evidence"], "evidence"),
         confidence=validate_confidence(data["confidence"]),
         ambiguous=ambiguous,
-        missing_information=missing_information,
+        clarification_requirements=clarification_requirements,
     )
 
 

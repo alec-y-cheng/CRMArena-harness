@@ -41,7 +41,7 @@ class NamedEntityDisambiguationDSLTests(unittest.TestCase):
               "exact_purchase_date": "",
               "attributes": ["speed training"],
               "clarification_needed": false,
-              "missing_information": []
+              "clarification_requirements": []
             }
             """
         )
@@ -90,7 +90,7 @@ class NamedEntityDisambiguationDSLTests(unittest.TestCase):
         self.assertTrue(state.extraction.clarification_needed)
         self.assertIn(
             "product kind or distinguishing product attributes",
-            state.extraction.missing_information,
+            state.extraction.clarification_requirements,
         )
 
     def test_required_slot_checks_mark_missing_timeframe_for_clarification(self):
@@ -109,7 +109,7 @@ class NamedEntityDisambiguationDSLTests(unittest.TestCase):
         _apply_required_slot_checks(state)
 
         self.assertTrue(state.extraction.clarification_needed)
-        self.assertIn("purchase date or timeframe", state.extraction.missing_information)
+        self.assertIn("purchase date or timeframe", state.extraction.clarification_requirements)
 
     def test_normalize_purchase_date_window_relative_month_clamps_day(self):
         extraction = NEDExtraction(period="month", interval_count=1)
@@ -178,7 +178,7 @@ class NamedEntityDisambiguationDSLTests(unittest.TestCase):
               "evidence": "Purchased product appears in eligible order item.",
               "confidence": "high",
               "ambiguous": false,
-              "missing_information": []
+              "clarification_requirements": []
             }
             """,
             allowed_product_ids=["01tWs000002wROTIA2"],
@@ -196,7 +196,7 @@ class NamedEntityDisambiguationDSLTests(unittest.TestCase):
                   "evidence": "Catalog match only.",
                   "confidence": "medium",
                   "ambiguous": false,
-                  "missing_information": []
+                  "clarification_requirements": []
                 }
                 """,
                 allowed_product_ids=["01tWs000002wROTIA2"],
@@ -216,13 +216,13 @@ class NamedEntityDisambiguationDSLTests(unittest.TestCase):
                 '{"question": "Which Salesforce record should I query?"}'
             )
 
-    def test_render_clarification_prompt_uses_missing_information(self):
+    def test_render_clarification_prompt_uses_clarification_requirements(self):
         prompt = render_ned_clarification_prompt(
             NEDExtraction(
                 entity_phrase="purchase",
                 product_terms=["purchase"],
                 clarification_needed=True,
-                missing_information=["product kind or distinguishing product attributes"],
+                clarification_requirements=["product kind or distinguishing product attributes"],
             ),
             ["product kind or distinguishing product attributes"],
             "I need help with my purchase.",

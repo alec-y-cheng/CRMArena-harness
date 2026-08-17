@@ -108,7 +108,7 @@ class ExternalRequestRoute:
         evidence_required: Optional[List[Dict[str, Any]]] = None,
         subject_scope: str = "unknown",
         clarification_needed: bool = False,
-        missing_information: Optional[List[str]] = None,
+        clarification_requirements: Optional[List[str]] = None,
         disallowed_information: Optional[List[str]] = None,
         threat_confidence: str = "unknown",
         candidate_route: Optional[str] = None,
@@ -120,7 +120,7 @@ class ExternalRequestRoute:
         self.evidence_required = evidence_required or []
         self.subject_scope = subject_scope
         self.clarification_needed = clarification_needed
-        self.missing_information = missing_information or []
+        self.clarification_requirements = clarification_requirements or []
         self.disallowed_information = disallowed_information or []
         self.threat_confidence = threat_confidence
         self.candidate_route = candidate_route
@@ -134,7 +134,7 @@ class ExternalRequestRoute:
             "evidence_required": [dict(item) for item in self.evidence_required],
             "subject_scope": self.subject_scope,
             "clarification_needed": self.clarification_needed,
-            "missing_information": list(self.missing_information),
+            "clarification_requirements": list(self.clarification_requirements),
             "disallowed_information": list(self.disallowed_information),
             "threat_confidence": self.threat_confidence,
             "candidate_route": self.candidate_route,
@@ -264,7 +264,7 @@ Return JSON with exactly these keys:
   ],
   "subject_scope": "public|current_customer|other_customer|internal_company|unknown",
   "clarification_needed": false,
-  "missing_information": [],
+  "clarification_requirements": [],
   "disallowed_information": ["fixed evidence type"],
   "threat_confidence": "high|medium|low|unknown",
   "candidate_route": "knowledge_qa|named_entity_disambiguation|unsupported|null",
@@ -394,14 +394,14 @@ def evaluate_final_response(answer: str, evidence_classes: List[str]) -> GateDec
     )
 
 
-def respond_to_user(missing_information: List[str]) -> str:
+def respond_to_user(clarification_requirements: List[str]) -> str:
     """Render a concise external-facing clarification question."""
-    if _only_direct_reference_missing(missing_information):
+    if _only_direct_reference_missing(clarification_requirements):
         return (
             "Could you share the product type, item description, and when you "
             "purchased it so I can look for the right purchase?"
         )
-    missing_values = _customer_facing_missing_information(missing_information)
+    missing_values = _customer_facing_clarification_requirements(clarification_requirements)
     missing = ", ".join(item for item in missing_values if item)
     if missing:
         return "Could you clarify {} so I can help with the right request?".format(
@@ -429,15 +429,15 @@ def should_fallback_to_ned_from_clarify(route: ExternalRequestRoute) -> bool:
     return (
         bool(actions.intersection(ned_actions) or evidence_types.intersection(ned_evidence))
         and _only_direct_reference_missing(
-        route.missing_information
+        route.clarification_requirements
         )
     )
 
 
-def _customer_facing_missing_information(missing_information: List[str]) -> List[str]:
+def _customer_facing_clarification_requirements(clarification_requirements: List[str]) -> List[str]:
     """Drop internal/reference identifiers from clarification text."""
     cleaned = []
-    for item in missing_information:
+    for item in clarification_requirements:
         text = str(item or "").strip()
         if not text or _is_direct_reference_missing(text):
             continue
@@ -445,8 +445,8 @@ def _customer_facing_missing_information(missing_information: List[str]) -> List
     return cleaned
 
 
-def _only_direct_reference_missing(missing_information: List[str]) -> bool:
-    values = [str(item or "").strip() for item in missing_information if str(item or "").strip()]
+def _only_direct_reference_missing(clarification_requirements: List[str]) -> bool:
+    values = [str(item or "").strip() for item in clarification_requirements if str(item or "").strip()]
     return bool(values) and all(_is_direct_reference_missing(value) for value in values)
 
 

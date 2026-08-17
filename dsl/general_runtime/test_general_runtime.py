@@ -27,24 +27,24 @@ class GeneralRuntimeTests(unittest.TestCase):
             "route": "policy_violation_identification",
             "confidence": "high",
             "target_record_id": "500Wt00000DDyznIAD",
-            "missing_information": [],
+            "clarification_requirements": [],
             "reason": "Case policy breach request",
         }))
 
         self.assertEqual(route.route, "policy_violation_identification")
         self.assertEqual(route.target_record_id, "500Wt00000DDyznIAD")
 
-    def test_internal_router_accepts_stringified_empty_missing_information(self):
+    def test_internal_router_accepts_stringified_empty_clarification_requirements(self):
         route = parse_internal_workflow_route_json(json.dumps({
             "route": "wrong_stage_rectification",
             "confidence": "high",
             "target_record_id": "006Wt000007BGGjIAO",
-            "missing_information": "[]",
+            "clarification_requirements": "[]",
             "reason": "Opportunity stage request",
         }))
 
         self.assertEqual(route.route, "wrong_stage_rectification")
-        self.assertEqual(route.missing_information, [])
+        self.assertEqual(route.clarification_requirements, [])
 
     def test_internal_router_heuristic_fallback_routes_opportunity(self):
         router = InternalWorkflowRouter(lambda _messages: "{}")
@@ -74,7 +74,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                     "reason": "return policy evidence",
                 }
             ],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
         frame = parse_instance_frame_json(json.dumps(payload))
         validate_instance_frame(frame, spec)
@@ -106,7 +106,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                     "reason": "need matching customer purchase",
                 }
             ],
-            "missing_information": [],
+            "clarification_requirements": [],
             "request_summary": "Find the jacket purchased about two weeks ago.",
         }
         frame = parse_instance_frame_json(json.dumps(payload))
@@ -140,7 +140,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                     "reason": "match current customer purchase",
                 }
             ]),
-            "missing_information": "[]",
+            "clarification_requirements": "[]",
         }
 
         frame = parse_instance_frame_json(json.dumps(payload))
@@ -148,7 +148,7 @@ class GeneralRuntimeTests(unittest.TestCase):
         self.assertEqual(frame.product_terms, ["trail jacket", "jacket"])
         self.assertEqual(frame.target_entities[0]["surface_text"], "trail jacket")
         self.assertEqual(frame.constraints[0]["start_date"], "2020-03-17")
-        self.assertEqual(frame.missing_information, [])
+        self.assertEqual(frame.clarification_requirements, [])
 
     def test_answer_candidate_parser_decodes_json_string_candidate(self):
         spec = load_workflow_spec("external_knowledge_qa")
@@ -175,7 +175,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                     "reason": "public return policy",
                 }
             ],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
 
         parsed = parse_answer_candidate_json(
@@ -214,7 +214,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                                 "reason": "public return policy",
                             }
                         ],
-                        "missing_information": [],
+                        "clarification_requirements": [],
                         "candidate_records": [
                             {"evidence_id": "ka0Return", "match_status": "supports"}
                         ],
@@ -237,7 +237,7 @@ class GeneralRuntimeTests(unittest.TestCase):
             "product_terms": [],
             "constraints": [],
             "required_evidence_instances": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }))
         state.runtime_data = {"info": {}}
         state.retrieved_records["Case"] = [
@@ -298,7 +298,7 @@ class GeneralRuntimeTests(unittest.TestCase):
             "product_terms": [],
             "constraints": [],
             "required_evidence_instances": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }))
         state.retrieved_records["Case"] = [
             {
@@ -419,7 +419,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                     "end_date": "2020-12-27",
                     "is_valid_for_retrieval": True,
                 },
-                "missing_information": [],
+                "clarification_requirements": [],
             },
             "required_evidence_instances": [],
             "constraints": {
@@ -445,7 +445,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                 },
             },
             "required_evidence_instances": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
 
         frame = parse_instance_frame_json(json.dumps(payload))
@@ -471,7 +471,7 @@ class GeneralRuntimeTests(unittest.TestCase):
                     "reason": "support evidence",
                 }
             ],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
         state.instance_frame = parse_instance_frame_json(json.dumps(payload))
         enabled = [item.action for item in compute_enabled_actions(state)]
@@ -488,7 +488,7 @@ class GeneralRuntimeTests(unittest.TestCase):
             "product_terms": ["running shoes"],
             "constraints": [],
             "required_evidence_instances": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }))
         state.evidence_items = [
             EvidenceItem(
@@ -534,7 +534,7 @@ class GeneralRuntimeTests(unittest.TestCase):
             "product_terms": ["basketball tank top"],
             "constraints": [],
             "required_evidence_instances": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }))
 
         prompt = build_generic_extraction_prompt(state)
@@ -580,14 +580,14 @@ class GeneralRuntimeTests(unittest.TestCase):
             "product_terms": [],
             "constraints": [],
             "required_evidence_instances": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }))
         state.answer_candidate = {
             "answer": "15% discount",
             "confidence": "high",
             "evidence": "Discount article",
             "selected_evidence": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
         state.selected_evidence = [
             {
@@ -627,7 +627,7 @@ class GeneralRuntimeTests(unittest.TestCase):
             "confidence": "high",
             "evidence": "selected policy",
             "selected_evidence": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
         state.selected_evidence = [
             {
@@ -678,7 +678,7 @@ class GeneralRuntimeTests(unittest.TestCase):
             "confidence": "high",
             "evidence": "care article",
             "selected_evidence": [],
-            "missing_information": [],
+            "clarification_requirements": [],
         }
         state.selected_evidence = [
             {

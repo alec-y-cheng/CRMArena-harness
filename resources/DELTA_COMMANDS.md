@@ -1484,3 +1484,283 @@ not copy this block as-is; replace every placeholder first:
 # AGENT_MODEL=<agent_model_name> \
 # scripts/rerun_missing_wsr_react_direct.sh
 ```
+
+### Generic EWM Smoke Test With Base Claude, Worst-to-Best Task Order
+
+This tests the new generic `ewm` runtime, not the older task-specific
+`general_dsl` path. It uses base Claude CLI as the agent and OpenRouter
+`gpt-4o-2024-11-20` for the simulated user and judge, matching the baseline
+setup we have been using.
+
+Task order is based on the latest local base Claude ReAct baseline results,
+from weakest to strongest among the selected read-oriented families:
+
+1. `knowledge_qa` (`original`)
+2. `policy_violation_identification` (`b2b`)
+3. `confidential_company_knowledge` (`b2b`)
+4. `wrong_stage_rectification` (`b2b`)
+5. `named_entity_disambiguation` (`original`)
+6. `internal_operation_data` (`b2b`)
+7. `private_customer_information` (`b2b`)
+
+Run from a login node or compute node where Claude CLI authentication is
+available. This does not require vLLM.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RUN_NAME="base_claude_ewm_smoke_5each_$(date +%Y%m%d_%H%M)"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+
+  COMMON_ENV="MODEL_CONFIG_FILE=/dev/null AGENT_MODEL=claude_cli AGENT_PROVIDER=claude_cli CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench CLAUDE_CLI_MODEL=${CLAUDE_CLI_MODEL:-default} AGENT_REASONING_MODE=default AGENT_STRATEGY=ewm JUDGE_PROVIDER=openrouter USER_PROVIDER=openrouter JUDGE_MODEL=${JUDGE_MODEL:-openai/gpt-4o-2024-11-20} USER_MODEL=${USER_MODEL:-openai/gpt-4o-2024-11-20} MAX_TASKS_PER_CATEGORY=5 INTERACTIVE=true PRIVACY_AWARE_PROMPT=true MAX_TURNS=20 MAX_USER_TURNS=10 AGENT_MAX_TOKENS=2500 USE_SYNTACTIC_VERIFIER=false USE_WORKING_MEMORY=false USE_QUOTE_CLIPBOARD=false USE_LEAD_CLIPBOARD=false ROUTING_MODE=none SCAFFOLD_MODE=none SKIP_HEALTH_CHECKS=true CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern PYTHON_BIN=$(command -v python) RUN_TAG='"$RUN_NAME"' LOG_TAG='"$RUN_NAME"'"
+
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=knowledge_qa ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=policy_violation_identification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=confidential_company_knowledge ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=wrong_stage_rectification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=named_entity_disambiguation ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=internal_operation_data ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=private_customer_information ./run_tasks_crmarena_pro.sh"
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Original-org results: /work/hdd/bgtb/acheng11/CRMArena/results/original_multi-turn/ewm_claude_cli_${RUN_NAME}_noverifier_nowm"
+echo "B2B results: /work/hdd/bgtb/acheng11/CRMArena/results/b2b_multi-turn/ewm_claude_cli_${RUN_NAME}_noverifier_nowm"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+### Generic EWM Smoke Test With Codex 5.6, Worst-to-Best Task Order
+
+This is the same new generic `ewm` runtime smoke test as above, but with Codex
+CLI as the agent. It uses OpenRouter `gpt-4o-2024-11-20` for the simulated user
+and judge. Change `CODEX_CLI_MODEL` if your Codex CLI account exposes a
+different model slug.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+RUN_NAME="codex56_ewm_smoke_5each_$(date +%Y%m%d_%H%M)"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+
+  COMMON_ENV="MODEL_CONFIG_FILE=/dev/null AGENT_MODEL=codex_cli AGENT_PROVIDER=codex_cli CODEX_HOME=/work/hdd/bgtb/acheng11/.codex-bench CODEX_CLI_MODEL=${CODEX_CLI_MODEL:-gpt-5.6-sol} AGENT_REASONING_MODE=default AGENT_STRATEGY=ewm JUDGE_PROVIDER=openrouter USER_PROVIDER=openrouter JUDGE_MODEL=${JUDGE_MODEL:-openai/gpt-4o-2024-11-20} USER_MODEL=${USER_MODEL:-openai/gpt-4o-2024-11-20} MAX_TASKS_PER_CATEGORY=5 INTERACTIVE=true PRIVACY_AWARE_PROMPT=true MAX_TURNS=20 MAX_USER_TURNS=10 AGENT_MAX_TOKENS=2500 USE_SYNTACTIC_VERIFIER=false USE_WORKING_MEMORY=false USE_QUOTE_CLIPBOARD=false USE_LEAD_CLIPBOARD=false ROUTING_MODE=none SCAFFOLD_MODE=none SKIP_HEALTH_CHECKS=true CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern PYTHON_BIN=$(command -v python) RUN_TAG='"$RUN_NAME"' LOG_TAG='"$RUN_NAME"'"
+
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=knowledge_qa ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=policy_violation_identification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=confidential_company_knowledge ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=wrong_stage_rectification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=named_entity_disambiguation ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=internal_operation_data ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=private_customer_information ./run_tasks_crmarena_pro.sh"
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Original-org results: /work/hdd/bgtb/acheng11/CRMArena/results/original_multi-turn/ewm_codex_cli_${RUN_NAME}_noverifier_nowm"
+echo "B2B results: /work/hdd/bgtb/acheng11/CRMArena/results/b2b_multi-turn/ewm_codex_cli_${RUN_NAME}_noverifier_nowm"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+### Generic EWM Codex Smoke Test As Slurm Batch Job
+
+This runs the Codex generic EWM smoke test as a Slurm job and charges
+`bhit-dtai-gh` by default. It uses a short smoke configuration:
+`MAX_TASKS_PER_CATEGORY=2`, `MAX_TURNS=4`, `MAX_USER_TURNS=4`, and
+`EWM_MAX_STEPS=8`. The task order is KQA, PVI, CCK, WSR, NED, IOD, PCI.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+
+sbatch scripts/deltaai_codex_ewm_smoke.sbatch
+```
+
+Useful overrides:
+
+```bash
+# Use 5 examples per task family.
+sbatch --export=ALL,MAX_TASKS_PER_CATEGORY=5 \
+  scripts/deltaai_codex_ewm_smoke.sbatch
+
+# Charge the older bgtb allocation instead.
+sbatch --account=bgtb-dtai-gh \
+  scripts/deltaai_codex_ewm_smoke.sbatch
+
+# Use a different Codex CLI model if your bench config supports it.
+sbatch --export=ALL,CODEX_CLI_MODEL=gpt-5.4-mini,MAX_TASKS_PER_CATEGORY=8 \
+  scripts/deltaai_codex_ewm_smoke.sbatch
+```
+
+### Generic EWM Claude 10-Example Slurm Smoke Test
+
+This runs the same selected EWM task order as the Codex Slurm smoke job, but
+with Claude CLI as the agent. It does not require vLLM. It requests one GPU
+because DeltaAI jobs in this project are expected to request one, although the
+agent itself is served through Claude CLI.
+
+Optional quick readiness check before submitting. If Claude session quota is
+still exhausted, this should return the quota/reset message within 3 minutes:
+
+```bash
+CLAUDE_CONFIG_DIR=/work/hdd/bgtb/acheng11/.claude-bench \
+timeout 180 claude --print --no-session-persistence --output-format text \
+  "Return exactly: claude ok"
+```
+
+Submit 10 examples per selected task family:
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/ewm-smoke/slurm
+
+sbatch --export=ALL,MAX_TASKS_PER_CATEGORY=5,RUN_TAG=claude_ewm_smoke_5each_4turn_$(date +%Y%m%d_%H%M) \
+  scripts/deltaai_claude_ewm_smoke.sbatch
+```
+
+If a previous Claude EWM run failed with `Claude's response exceeded the 1200
+output token maximum`, rerun with a fresh `RUN_TAG` as above. The script now
+defaults to larger EWM component caps so Claude can emit the structured JSON
+the runtime expects.
+
+Useful overrides:
+
+```bash
+# Charge the older bgtb allocation instead of the script default bhit account.
+sbatch --account=bgtb-dtai-gh --export=ALL,MAX_TASKS_PER_CATEGORY=10 \
+  scripts/deltaai_claude_ewm_smoke.sbatch
+
+# Use an explicit Claude model if your Claude CLI account exposes it.
+sbatch --export=ALL,MAX_TASKS_PER_CATEGORY=10,CLAUDE_CLI_MODEL=claude-opus-5 \
+  scripts/deltaai_claude_ewm_smoke.sbatch
+
+# More turns for debugging multi-turn follow-up behavior.
+sbatch --export=ALL,MAX_TASKS_PER_CATEGORY=10,MAX_TURNS=8,MAX_USER_TURNS=8,EWM_MAX_STEPS=10 \
+  scripts/deltaai_claude_ewm_smoke.sbatch
+
+# Override Claude/EWM output caps if needed.
+sbatch --export=ALL,MAX_TASKS_PER_CATEGORY=10,EWM_DECISION_MAX_TOKENS=6000,EWM_COMPLETION_VERIFIER_MAX_TOKENS=3000 \
+  scripts/deltaai_claude_ewm_smoke.sbatch
+```
+
+### Generic EWM Codex CLI Smoke Test On Login Node
+
+Use this when you want to avoid Slurm/GPU usage and run the generic EWM runtime
+through Codex CLI directly from the login node. This does not use vLLM. It uses
+the separate benchmark Codex authentication directory, not your default/personal
+Codex account. It uses OpenRouter `gpt-4o-2024-11-20` for the simulated user
+and judge from `/work/hdd/bgtb/acheng11/.model-configs.txt`.
+
+Change `MAX_TASKS_PER_CATEGORY=5` to `1`, `2`, `10`, or `0` as needed. Keep a
+fresh `RUN_NAME` if you want separate logs.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+MAX_TASKS_PER_CATEGORY=5
+BENCH_CODEX_HOME="/work/hdd/bgtb/acheng11/.codex-bench"
+RUN_NAME="codex_login_ewm_${MAX_TASKS_PER_CATEGORY}each_$(date +%Y%m%d_%H%M)"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+
+  set -a
+  source /work/hdd/bgtb/acheng11/.model-configs.txt
+  set +a
+
+  COMMON_ENV="MODEL_CONFIG_FILE=/dev/null AGENT_MODEL=codex_cli AGENT_PROVIDER=codex_cli CODEX_HOME='"$BENCH_CODEX_HOME"' CODEX_CLI_MODEL=${CODEX_CLI_MODEL:-gpt-5.6-sol} AGENT_REASONING_MODE=default AGENT_STRATEGY=ewm JUDGE_PROVIDER=openrouter USER_PROVIDER=openrouter JUDGE_MODEL=${JUDGE_MODEL:-openai/gpt-4o-2024-11-20} USER_MODEL=${USER_MODEL:-openai/gpt-4o-2024-11-20} MAX_TASKS_PER_CATEGORY='"$MAX_TASKS_PER_CATEGORY"' INTERACTIVE=true PRIVACY_AWARE_PROMPT=true MAX_TURNS=4 MAX_USER_TURNS=4 EWM_MAX_STEPS=10 AGENT_MAX_TOKENS=2500 USE_SYNTACTIC_VERIFIER=false USE_WORKING_MEMORY=false USE_QUOTE_CLIPBOARD=false USE_LEAD_CLIPBOARD=false ROUTING_MODE=none SCAFFOLD_MODE=none SKIP_HEALTH_CHECKS=true CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern PYTHON_BIN=$(command -v python) RUN_TAG='"$RUN_NAME"' LOG_TAG='"$RUN_NAME"'"
+
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=knowledge_qa ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=policy_violation_identification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=confidential_company_knowledge ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=wrong_stage_rectification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=named_entity_disambiguation ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=internal_operation_data ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=private_customer_information ./run_tasks_crmarena_pro.sh"
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Original-org results: /work/hdd/bgtb/acheng11/CRMArena/results/original_multi-turn/ewm_codex_cli_${RUN_NAME}_noverifier_nowm"
+echo "B2B results: /work/hdd/bgtb/acheng11/CRMArena/results/b2b_multi-turn/ewm_codex_cli_${RUN_NAME}_noverifier_nowm"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same login node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
+Sanity check that this command is using the benchmark Codex account before
+launching a paid run:
+
+```bash
+CODEX_HOME=/work/hdd/bgtb/acheng11/.codex-bench \
+codex exec --skip-git-repo-check "Return exactly: bench codex ok"
+```

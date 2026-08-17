@@ -125,7 +125,7 @@ class CanonicalGeneralRuntimeDriver:
             self._frame_instance(state, conversation_text, info, messages)
             snapshot_state(info, "frame_instance", state)
 
-            if state.instance_frame and state.instance_frame.missing_information:
+            if state.instance_frame and state.instance_frame.clarification_requirements:
                 fallback = str(clarification_policy.get("fallback_when_exhausted") or "unavailable")
                 if can_ask_user(env) and clarification_turns < max_clarification_turns:
                     clarification_turns += 1
@@ -133,7 +133,7 @@ class CanonicalGeneralRuntimeDriver:
                         self.executor,
                         state,
                         "pause_for_clarification",
-                        {"missing_information": state.instance_frame.missing_information},
+                        {"clarification_requirements": state.instance_frame.clarification_requirements},
                     )
                     result = respond_env(env, messages, info, state.clarification_prompt)
                     info.setdefault("clarification_turns", []).append(
@@ -148,11 +148,11 @@ class CanonicalGeneralRuntimeDriver:
                 if fallback == "search_with_available_evidence":
                     info.setdefault("clarification_fallbacks", []).append(
                         {
-                            "missing_information": list(state.instance_frame.missing_information),
+                            "clarification_requirements": list(state.instance_frame.clarification_requirements),
                             "fallback": fallback,
                         }
                     )
-                    state.instance_frame.missing_information = []
+                    state.instance_frame.clarification_requirements = []
                 elif can_ask_user(env):
                     info["clarification_exhausted"] = True
                     return respond_env(env, messages, info, render_unavailable_response())
@@ -666,7 +666,7 @@ class CanonicalGeneralRuntimeDriver:
         info = state.runtime_data["info"]
         messages = state.runtime_data["messages"]
         if not state.evidence_items:
-            state.answer_candidate = {"answer": "None", "selected_evidence": [], "missing_information": []}
+            state.answer_candidate = {"answer": "None", "selected_evidence": [], "clarification_requirements": []}
             return
         _prepare_extraction_evidence(state)
         extractor_messages = [
@@ -689,7 +689,7 @@ class CanonicalGeneralRuntimeDriver:
                 extractor_messages.append({"role": "assistant", "content": output})
                 extractor_messages.append({"role": "user", "content": "Invalid extraction JSON: {}. Retry with exactly one JSON object and no prose.".format(last_error)})
         info["generic_extraction_error"] = last_error
-        state.answer_candidate = {"answer": "None", "selected_evidence": [], "missing_information": []}
+        state.answer_candidate = {"answer": "None", "selected_evidence": [], "clarification_requirements": []}
 
     def _handle_disclosure_gate(self, state: ExecutionState, arguments: Mapping[str, Any]) -> None:
         info = state.runtime_data["info"]
@@ -777,7 +777,7 @@ class CanonicalGeneralRuntimeDriver:
         state.completion_state = "refused"
 
     def _handle_pause_for_clarification(self, state: ExecutionState, arguments: Mapping[str, Any]) -> None:
-        missing = list(arguments.get("missing_information") or [])
+        missing = list(arguments.get("clarification_requirements") or [])
         state.clarification_prompt = _render_clarification(missing)
         state.completion_state = "paused_for_clarification"
 
@@ -788,14 +788,14 @@ def _apply_required_instance_fields(state: ExecutionState) -> None:
         return
     preserve_model_missing = bool(
         state.workflow_spec.clarification_policy.get(
-            "ask_when_instance_missing_information",
+            "ask_when_instance_clarification_requirements",
             False,
         )
     )
     required_fields = state.workflow_spec.clarification_policy.get("required_fields")
     if not required_fields:
         required_fields = state.workflow_spec.data.get("instance_contract", {}).get("required_fields", [])
-    missing = list(frame.missing_information) if preserve_model_missing else []
+    missing = list(frame.clarification_requirements) if preserve_model_missing else []
     for field in required_fields:
         if field == "product_terms" and not _product_terms_from_frame(frame):
             missing.append("product or item description")
@@ -807,11 +807,11 @@ def _apply_required_instance_fields(state: ExecutionState) -> None:
             missing.append("Opportunity ID")
         elif field == "case_id" and not _target_id_from_state(state, "Case"):
             missing.append("Case ID")
-    frame.missing_information = _dedupe_strings(missing)
+    frame.clarification_requirements = _dedupe_strings(missing)
 
 
-def _render_clarification(missing_information: List[str]) -> str:
-    missing = _dedupe_strings(missing_information)
+def _render_clarification(clarification_requirements: List[str]) -> str:
+    missing = _dedupe_strings(clarification_requirements)
     if missing:
         return "Could you clarify {} so I can continue?".format(", ".join(missing))
     return "Could you clarify the missing details so I can continue?"

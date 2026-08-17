@@ -24,7 +24,7 @@
     "type": "violating_policy_article_id_or_none"
   },
   "clarification_policy": {
-    "ask_when_instance_missing_information": false,
+    "ask_when_instance_clarification_requirements": false,
     "fallback_when_exhausted": "unavailable",
     "max_turns": 1,
     "required_fields": [
@@ -56,7 +56,7 @@
       "answer": "Knowledge__kav.Id of violated policy article, or None",
       "confidence": "high|medium|low|unknown",
       "evidence": "brief explanation grounded in case facts, linked context, interaction evidence, and policy article text",
-      "missing_information": [],
+      "clarification_requirements": [],
       "selected_evidence": [
         {
           "evidence_id": "retrieved Case, linked context, interaction, or Knowledge__kav id used for the answer",
@@ -87,7 +87,7 @@
   },
   "instance_contract": {
     "fields": {
-      "missing_information": "Case ID if it is absent from the conversation",
+      "clarification_requirements": "Case ID if it is absent from the conversation",
       "query_terms": "concise internal policy search terms if the prompt or case details imply a specific policy area",
       "target_entities": "the target Case.Id and any stated policy-violation focus"
     },

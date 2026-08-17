@@ -39,13 +39,13 @@ class KnowledgeQASearchPlan:
         search_terms: Optional[List[str]] = None,
         product_terms: Optional[List[str]] = None,
         clarification_needed: bool = False,
-        missing_information: Optional[List[str]] = None,
+        clarification_requirements: Optional[List[str]] = None,
     ):
         self.normalized_question = normalized_question
         self.search_terms = search_terms or []
         self.product_terms = product_terms or []
         self.clarification_needed = clarification_needed
-        self.missing_information = missing_information or []
+        self.clarification_requirements = clarification_requirements or []
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -53,7 +53,7 @@ class KnowledgeQASearchPlan:
             "search_terms": list(self.search_terms),
             "product_terms": list(self.product_terms),
             "clarification_needed": self.clarification_needed,
-            "missing_information": list(self.missing_information),
+            "clarification_requirements": list(self.clarification_requirements),
         }
 
 
@@ -197,7 +197,7 @@ Return JSON with exactly these keys:
   "search_terms": ["concise search phrase"],
   "product_terms": ["product or service names if any"],
   "clarification_needed": false,
-  "missing_information": []
+  "clarification_requirements": []
 }}
 """.format(
         task_query=task_query.strip(),
@@ -414,9 +414,9 @@ def render_knowledge_answer_response(answer: KnowledgeQAAnswer) -> str:
     return "None"
 
 
-def respond_to_user(missing_information: List[str]) -> str:
+def respond_to_user(clarification_requirements: List[str]) -> str:
     """Render one clarification question for missing knowledge QA information."""
-    missing = ", ".join(item for item in missing_information if item)
+    missing = ", ".join(item for item in clarification_requirements if item)
     if missing:
         return "Could you clarify {} so I can find the right public article?".format(missing)
     return "Could you clarify what product or topic you want information about?"
