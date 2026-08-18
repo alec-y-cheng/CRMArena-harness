@@ -1642,6 +1642,74 @@ sbatch --export=ALL,CODEX_CLI_MODEL=gpt-5.4-mini,MAX_TASKS_PER_CATEGORY=8 \
   scripts/deltaai_codex_ewm_smoke.sbatch
 ```
 
+### Generic EWM Qwen35 vLLM Smoke Test On Serving Node
+
+Use this when Qwen35 is already being served by vLLM and you are SSH'd into
+the same compute node as the vLLM server. This tests the generic `ewm` runtime
+with Qwen35 as the agent, simulated user, and judge through the OpenAI-compatible
+vLLM endpoint.
+
+By default this runs two examples per selected task family with short
+interaction limits. Change `MAX_TASKS_PER_CATEGORY=2` to `5`, `10`, or `0`
+when you are ready to scale.
+
+```bash
+cd /work/hdd/bgtb/acheng11/CRMArena
+mkdir -p logs/run_wrappers
+
+QWEN_BASE_URL="${QWEN_BASE_URL:-http://127.0.0.1:8001/v1}"
+QWEN_MODEL="${QWEN_MODEL:-openai/Qwen3.5-35B-A3B}"
+MAX_TASKS_PER_CATEGORY="${MAX_TASKS_PER_CATEGORY:-2}"
+RUN_NAME="qwen35_vllm_ewm_smoke_${MAX_TASKS_PER_CATEGORY}each_$(date +%Y%m%d_%H%M)"
+PID_FILE="logs/run_wrappers/${RUN_NAME}.pid"
+PGID_FILE="logs/run_wrappers/${RUN_NAME}.pgid"
+
+curl -fsS "${QWEN_BASE_URL%/}/models" >/dev/null || {
+  echo "ERROR: Qwen35 vLLM endpoint is not reachable at ${QWEN_BASE_URL%/}/models"
+  echo "Run this from the same compute node as the vLLM server, or set QWEN_BASE_URL."
+  exit 1
+}
+
+setsid nohup bash -lc '
+  cd /work/hdd/bgtb/acheng11/CRMArena
+  echo "$$" > "'"$PID_FILE"'"
+  ps -o pgid= -p "$$" | tr -d " " > "'"$PGID_FILE"'"
+
+  module purge >/dev/null 2>&1 || true
+  module load gcc-native
+  module load cudatoolkit/25.5_12.9
+  module load python/miniforge3_pytorch/2.10.0
+  source .venv-crm-modern/bin/activate
+
+  COMMON_ENV="MODEL_CONFIG_FILE=/dev/null AGENT_MODEL='"$QWEN_MODEL"' AGENT_PROVIDER=openai AGENT_BASE_URL='"$QWEN_BASE_URL"' AGENT_API_KEY=dummy AGENT_STRATEGY=ewm JUDGE_PROVIDER=openai JUDGE_MODEL='"$QWEN_MODEL"' JUDGE_BASE_URL='"$QWEN_BASE_URL"' JUDGE_API_KEY=dummy USER_PROVIDER=openai USER_MODEL='"$QWEN_MODEL"' USER_BASE_URL='"$QWEN_BASE_URL"' USER_API_KEY=dummy MAX_TASKS_PER_CATEGORY='"$MAX_TASKS_PER_CATEGORY"' INTERACTIVE=true PRIVACY_AWARE_PROMPT=true MAX_TURNS=4 MAX_USER_TURNS=4 EWM_MAX_STEPS=8 AGENT_MAX_TOKENS=1800 EWM_FRAME_MAX_TOKENS=1200 EWM_DECISION_MAX_TOKENS=1400 EWM_CLAIM_MAX_TOKENS=1200 EWM_COMPLETION_VERIFIER_MAX_TOKENS=900 USE_SYNTACTIC_VERIFIER=false USE_WORKING_MEMORY=false USE_QUOTE_CLIPBOARD=false USE_LEAD_CLIPBOARD=false ROUTING_MODE=none SCAFFOLD_MODE=none CRMARENA_VENV=/work/hdd/bgtb/acheng11/CRMArena/.venv-crm-modern PYTHON_BIN=$(command -v python) RUN_TAG='"$RUN_NAME"' LOG_TAG='"$RUN_NAME"'"
+
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=knowledge_qa ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=policy_violation_identification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=confidential_company_knowledge ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=wrong_stage_rectification ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=original ORG_TYPES_CSV=original TASKS_CSV=named_entity_disambiguation ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=internal_operation_data ./run_tasks_crmarena_pro.sh"
+  eval "$COMMON_ENV EWM_ORG_TYPE=b2b ORG_TYPES_CSV=b2b TASKS_CSV=private_customer_information ./run_tasks_crmarena_pro.sh"
+' > "logs/run_wrappers/${RUN_NAME}.log" 2>&1 < /dev/null &
+
+for _ in $(seq 1 50); do
+  [[ -s "$PID_FILE" && -s "$PGID_FILE" ]] && break
+  sleep 0.1
+done
+WRAPPER_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+WRAPPER_PGID="$(cat "$PGID_FILE" 2>/dev/null || true)"
+echo "Started wrapper PID: ${WRAPPER_PID}"
+echo "Started wrapper PGID: ${WRAPPER_PGID}"
+echo "Wrapper log: /work/hdd/bgtb/acheng11/CRMArena/logs/run_wrappers/${RUN_NAME}.log"
+echo "Original-org results: /work/hdd/bgtb/acheng11/CRMArena/results/original_multi-turn/ewm_${QWEN_MODEL//[\/:,]/_}_${RUN_NAME}_noverifier_nowm"
+echo "B2B results: /work/hdd/bgtb/acheng11/CRMArena/results/b2b_multi-turn/ewm_${QWEN_MODEL//[\/:,]/_}_${RUN_NAME}_noverifier_nowm"
+if [[ -n "$WRAPPER_PGID" ]]; then
+  echo "Stop on this same node: kill -TERM -${WRAPPER_PGID}; sleep 5; kill -KILL -${WRAPPER_PGID}"
+else
+  echo "Could not read wrapper PGID. Find it with: ps -u \"$(id -u)\" -o pid,ppid,pgid,cmd | grep ${RUN_NAME}"
+fi
+```
+
 ### Generic EWM Claude 10-Example Slurm Smoke Test
 
 This runs the same selected EWM task order as the Codex Slurm smoke job, but
