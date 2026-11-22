@@ -3,7 +3,6 @@
 from typing import Any, Dict
 
 from dsl.external_facing.actions import ALLOWED_EVIDENCE_TYPES, DISALLOWED_EVIDENCE_TYPES, SUBJECT_SCOPES
-from dsl.general_runtime.actions import ALL_ACTIONS
 
 EVIDENCE_TYPES = list(ALLOWED_EVIDENCE_TYPES + DISALLOWED_EVIDENCE_TYPES)
 
@@ -20,17 +19,6 @@ INSTANCE_FRAME_SCHEMA: Dict[str, Any] = {
         "clarification_requirements": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["workflow_id", "request_summary", "target_entities", "required_evidence_instances", "clarification_requirements"],
-    "additionalProperties": False,
-}
-
-ACTION_SELECTION_SCHEMA: Dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "action": {"type": "string", "enum": list(ALL_ACTIONS)},
-        "arguments": {"type": "object"},
-        "reason": {"type": "string"},
-    },
-    "required": ["action", "arguments", "reason"],
     "additionalProperties": False,
 }
 

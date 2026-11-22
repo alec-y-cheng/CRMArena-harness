@@ -68,9 +68,6 @@ ACTION_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "stop": _action("termination", "Stop after completion or max-turn termination.", preconditions={"any_of": ["answer_contract_satisfied", "max_turns_reached"]}, effects={"sets": ["completion_state"], "may_set": []}),
 }
 
-ALL_ACTIONS = tuple(ACTION_DEFINITIONS.keys())
-SELECTABLE_ACTIONS = ALL_ACTIONS
-
 def action_category(action_name: str) -> str:
     return str(ACTION_DEFINITIONS.get(action_name, {}).get("category", ""))
 
@@ -79,17 +76,3 @@ def action_definition(action_name: str) -> Dict[str, Any]:
 
 def actions_for_category(category: str) -> List[str]:
     return [name for name, spec in ACTION_DEFINITIONS.items() if spec.get("category") == category]
-
-def compact_action_menu(action_names: List[str]) -> List[Dict[str, Any]]:
-    menu = []
-    for name in action_names:
-        spec = ACTION_DEFINITIONS[name]
-        menu.append({
-            "action": name,
-            "category": spec["category"],
-            "description": spec["description"],
-            "required_args": list(spec.get("required_args", [])),
-            "optional_args": list(spec.get("optional_args", [])),
-            "output": list(spec.get("effects", {}).get("sets", [])),
-        })
-    return menu

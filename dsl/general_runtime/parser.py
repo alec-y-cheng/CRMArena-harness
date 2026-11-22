@@ -5,7 +5,6 @@ import re
 from typing import Any, Dict, List
 
 from dsl.external_facing.actions import ALLOWED_EVIDENCE_TYPES, DISALLOWED_EVIDENCE_TYPES, SUBJECT_SCOPES
-from dsl.general_runtime.actions import ALL_ACTIONS
 from dsl.general_runtime.state import InstanceFrame
 
 
@@ -26,17 +25,6 @@ def parse_instance_frame_json(text: str) -> InstanceFrame:
         required_evidence_instances=_evidence_instances(data["required_evidence_instances"]),
         clarification_requirements=_loose_string_list(data["clarification_requirements"], "clarification_requirements"),
     )
-
-
-def parse_action_selection_json(text: str) -> Dict[str, Any]:
-    data = _loads_object(text)
-    _require_keys(data, ["action", "arguments", "reason"])
-    action = _as_string(data["action"], "action")
-    if action not in ALL_ACTIONS:
-        raise RuntimeParseError("Unknown action: {}".format(action))
-    if not isinstance(data["arguments"], dict):
-        raise RuntimeParseError("arguments must be an object")
-    return {"action": action, "arguments": dict(data["arguments"]), "reason": _as_string(data["reason"], "reason")}
 
 
 def parse_answer_candidate_json(text: str, state) -> Dict[str, Any]:

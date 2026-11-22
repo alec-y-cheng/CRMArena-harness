@@ -2,23 +2,12 @@
 
 import json
 
-from dsl.general_runtime.actions import compact_action_menu
 from dsl.general_runtime.state import ExecutionState, WorkflowSpec
 
 INSTANCE_FRAME_SYSTEM_PROMPT = """\
 Populate an InstanceFrame for the active workflow spec. Do not invent workflow
 requirements, evidence types, action names, object fields, or raw SOQL/SOSL.
 Return exactly one JSON object.
-"""
-
-ACTION_SELECTION_SYSTEM_PROMPT = """\
-Select one action from the enabled action menu and fill only the exposed
-arguments. Do not write raw SOQL/SOSL. Return exactly one JSON object.
-"""
-
-CLAIM_EXTRACTION_SYSTEM_PROMPT = """\
-Extract or update structured claims for the active workflow requirements using
-only retrieved evidence. Return exactly one JSON object.
 """
 
 GENERIC_EXTRACTION_SYSTEM_PROMPT = """\
@@ -60,25 +49,6 @@ Return an InstanceFrame JSON object for this workflow.
         metadata=json.dumps(metadata or {}, sort_keys=True),
         conversation=conversation_text.strip(),
         conversation_history=json.dumps(conversation_history or [], sort_keys=True),
-    )
-
-
-def build_action_selection_prompt(state: ExecutionState) -> str:
-    return """\
-Workflow ID: {workflow_id}
-Current phase: {phase}
-ExecutionState summary:
-{state}
-
-Enabled action menu:
-{menu}
-
-Return JSON: {{"action": "...", "arguments": {{}}, "reason": "..."}}
-""".format(
-        workflow_id=state.workflow_id,
-        phase=state.current_phase,
-        state=json.dumps(state.as_dict(), sort_keys=True),
-        menu=json.dumps(compact_action_menu([item.action for item in state.enabled_actions]), sort_keys=True),
     )
 
 

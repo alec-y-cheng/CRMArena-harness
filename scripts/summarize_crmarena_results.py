@@ -143,10 +143,6 @@ def summarize(path):
         invalid_actions = 0
         submitted = 0
         max_turns = 0
-        verifier_failure_events = 0
-        verifier_failure_tasks = 0
-        verifier_unknown_events = 0
-        verifier_unknown_tasks = 0
         for item in items:
             source, message, content = end_reason(item)
             message = str(message or "unknown")
@@ -164,14 +160,6 @@ def summarize(path):
                     empty_content += 1
             elif message == "SOQL/SOSL query error":
                 query_errors += 1
-            verification_failures = (item.get("agent_info") or {}).get("verification_failures") or []
-            if verification_failures:
-                verifier_failure_tasks += 1
-                verifier_failure_events += len(verification_failures)
-            verification_unknowns = (item.get("agent_info") or {}).get("verification_unknowns") or []
-            if verification_unknowns:
-                verifier_unknown_tasks += 1
-                verifier_unknown_events += len(verification_unknowns)
 
         successes = sum(1 for value in reward_values if value > 0)
         model_calls = [agent_metric(item, "model_calls") for item in items]
@@ -201,10 +189,6 @@ def summarize(path):
                 "avg_prompt_tokens": mean(prompt_tokens),
                 "avg_completion_tokens": mean(completion_tokens),
                 "avg_total_tokens": mean(total_tokens),
-                "verifier_failure_tasks": verifier_failure_tasks,
-                "verifier_failure_events": verifier_failure_events,
-                "verifier_unknown_tasks": verifier_unknown_tasks,
-                "verifier_unknown_events": verifier_unknown_events,
                 "top_end_reasons": "; ".join(f"{k}:{v}" for k, v in reason_counts.most_common(4)),
             }
         )
@@ -232,8 +216,6 @@ def write_markdown(path, source_path, rows, summaries, errors, table_fields, top
     path.parent.mkdir(parents=True, exist_ok=True)
     total = len(rows)
     total_successes = sum(int(row["successes"]) for row in summaries)
-    total_verifier_events = sum(int(row["verifier_failure_events"]) for row in summaries)
-    total_unknown_events = sum(int(row["verifier_unknown_events"]) for row in summaries)
     total_api_errors = sum(int(row["api_errors"]) for row in summaries)
     total_query_errors = sum(int(row["query_errors"]) for row in summaries)
     total_invalid_actions = sum(int(row["invalid_actions"]) for row in summaries)
@@ -252,8 +234,6 @@ def write_markdown(path, source_path, rows, summaries, errors, table_fields, top
         f"- API errors: {total_api_errors}",
         f"- SOQL/SOSL query-error endings: {total_query_errors}",
         f"- Invalid-action endings: {total_invalid_actions}",
-        f"- Verifier rejection events: {total_verifier_events}",
-        f"- Verifier unknown/allowed events: {total_unknown_events}",
         "",
         "## By Task",
         "",
@@ -295,10 +275,6 @@ def main():
         "avg_prompt_tokens",
         "avg_completion_tokens",
         "avg_total_tokens",
-        "verifier_failure_tasks",
-        "verifier_failure_events",
-        "verifier_unknown_tasks",
-        "verifier_unknown_events",
         "top_end_reasons",
     ]
 

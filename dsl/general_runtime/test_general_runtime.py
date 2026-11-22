@@ -15,10 +15,14 @@ from dsl.general_runtime.workflow_specs import list_workflow_specs, load_workflo
 
 class GeneralRuntimeTests(unittest.TestCase):
     def test_bundled_workflow_specs_validate(self):
-        specs = list_workflow_specs()
-        self.assertIn("external_knowledge_qa", specs)
-        self.assertIn("lead_qualification", specs)
-        self.assertIn("case_routing", specs)
+        required_specs = {
+            "external_knowledge_qa",
+            "external_named_entity_disambiguation",
+            "policy_violation_identification",
+            "wrong_stage_rectification",
+        }
+        specs = set(list_workflow_specs())
+        self.assertTrue(required_specs.issubset(specs))
         for workflow_id in specs:
             self.assertEqual(load_workflow_spec(workflow_id).workflow_id, workflow_id)
 

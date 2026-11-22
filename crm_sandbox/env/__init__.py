@@ -29,6 +29,5 @@ TOOLS = [
 ]
 
 TOOLS_FULL = TOOLS + [issue_soql_query, issue_sosl_query]
-print(len(TOOLS_FULL))
 assert all(tool.__info__ for tool in TOOLS)
 assert all(tool.__info__ for tool in TOOLS_FULL)

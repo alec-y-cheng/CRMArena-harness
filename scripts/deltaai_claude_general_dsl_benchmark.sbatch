@@ -26,6 +26,7 @@ set -euo pipefail
 #   BENCH_MODE=smoke|full
 #   RUN_TAG=<tag>
 #   MAX_TASKS_PER_CATEGORY=<n>    # 0 means all examples.
+#   AGENT_STRATEGY=general_dsl|react
 #   CLAUDE_CLI_MODEL=default      # default means do not pass --model.
 #   AGENT_REASONING_MODE=default  # default means do not pass --effort.
 
@@ -52,12 +53,18 @@ else
 fi
 MAX_TASKS_PER_CATEGORY="${MAX_TASKS_PER_CATEGORY:-$DEFAULT_MAX_TASKS}"
 
+BENCH_STRATEGY="${AGENT_STRATEGY:-general_dsl}"
+if [[ "$BENCH_STRATEGY" != "general_dsl" && "$BENCH_STRATEGY" != "react" ]]; then
+  echo "ERROR: AGENT_STRATEGY must be general_dsl or react, got: $BENCH_STRATEGY" >&2
+  exit 2
+fi
+
 if [[ -n "${RUN_TAG:-}" ]]; then
   BENCH_TAG="$RUN_TAG"
 elif [[ -n "$ARG_TAG" ]]; then
   BENCH_TAG="$ARG_TAG"
 else
-  BENCH_TAG="claude_general_dsl_${BENCH_MODE}_${MAX_TASKS_PER_CATEGORY}each_$(date +%Y%m%d_%H%M)"
+  BENCH_TAG="claude_${BENCH_STRATEGY}_${BENCH_MODE}_${MAX_TASKS_PER_CATEGORY}each_$(date +%Y%m%d_%H%M)"
 fi
 
 RESULT_ROOT="${RESULT_ROOT:-$REPO_DIR/results/claude-bench-results/$BENCH_TAG}"
@@ -86,6 +93,7 @@ export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-/work/hdd/bgtb/acheng11/.claude-b
 export CLAUDE_CLI_MODEL="${CLAUDE_CLI_MODEL:-default}"
 export AGENT_REASONING_MODE="${AGENT_REASONING_MODE:-default}"
 export USE_EXTERNAL_ROUTER_DSL="${USE_EXTERNAL_ROUTER_DSL:-true}"
+export USE_INTERNAL_ROUTER_DSL="${USE_INTERNAL_ROUTER_DSL:-true}"
 export CLI_MODEL_TIMEOUT_SECONDS="${CLI_MODEL_TIMEOUT_SECONDS:-900}"
 export HF_HOME="${HF_HOME:-/work/hdd/bgtb/acheng11/qwen_agent_ft/cache/huggingface}"
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
@@ -110,7 +118,8 @@ if [[ "$JUDGE_PROVIDER" == "openrouter" && -z "$JUDGE_API_KEY" ]]; then
   exit 2
 fi
 
-echo "Claude general DSL benchmark"
+echo "Claude CRMArena benchmark"
+echo "  strategy=$BENCH_STRATEGY"
 echo "  mode=$BENCH_MODE"
 echo "  tag=$BENCH_TAG"
 echo "  max_tasks_per_category=$MAX_TASKS_PER_CATEGORY"
@@ -120,6 +129,7 @@ echo "  claude_config_dir=$CLAUDE_CONFIG_DIR"
 echo "  claude_cli_model=$CLAUDE_CLI_MODEL"
 echo "  agent_reasoning_mode=$AGENT_REASONING_MODE"
 echo "  use_external_router_dsl=$USE_EXTERNAL_ROUTER_DSL"
+echo "  use_internal_router_dsl=$USE_INTERNAL_ROUTER_DSL"
 echo "  judge=$JUDGE_PROVIDER/$JUDGE_MODEL"
 echo "  user=$USER_PROVIDER/$USER_MODEL"
 
@@ -140,9 +150,8 @@ run_task() {
   python -u run_tasks.py \
     --model claude_cli \
     --task_category "$task_category" \
-    --agent_eval_mode default \
     --log_dir "$task_result_dir" \
-    --agent_strategy general_dsl \
+    --agent_strategy "$BENCH_STRATEGY" \
     --interactive \
     --llm_provider claude_cli \
     --judge_model "$JUDGE_MODEL" \
@@ -157,12 +166,8 @@ run_task() {
     --max_user_turns "${MAX_USER_TURNS:-10}" \
     --max_tasks_per_category "$MAX_TASKS_PER_CATEGORY" \
     --agent_max_tokens "${AGENT_MAX_TOKENS:-2500}" \
-    --max_verifier_retries "${MAX_VERIFIER_RETRIES:-3}" \
-    --working_memory_max_chars "${WORKING_MEMORY_MAX_CHARS:-1200}" \
-    --quote_clipboard_max_chars "${QUOTE_CLIPBOARD_MAX_CHARS:-1000}" \
-    --lead_clipboard_max_chars "${LEAD_CLIPBOARD_MAX_CHARS:-1000}" \
+    --max_dsl_retries "${MAX_DSL_RETRIES:-3}" \
     --routing_mode none \
-    --routing_min_confidence "${ROUTING_MIN_CONFIDENCE:-0.55}" \
     --scaffold_mode none \
     --reuse_results \
     --privacy_aware_prompt "${PRIVACY_AWARE_PROMPT:-true}" \
@@ -174,6 +179,8 @@ run_task b2b private_customer_information
 run_task original named_entity_disambiguation
 run_task original knowledge_qa
 run_task b2b confidential_company_knowledge
+run_task b2b wrong_stage_rectification
+run_task b2b policy_violation_identification
 
 echo "Done."
 echo "Results: $RESULT_ROOT"

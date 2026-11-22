@@ -71,7 +71,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
         driver = CanonicalGeneralRuntimeDriver(
             workflow_id="external_knowledge_qa",
             model_extractor=self._call_knowledge_qa_extractor,
-            max_extraction_retries=self.max_verifier_retries,
+            max_extraction_retries=self.max_dsl_retries,
         )
         result = driver.run(env, task_index=index)
         self._finalize_general_runtime_result(result, env)
@@ -83,7 +83,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
         driver = CanonicalGeneralRuntimeDriver(
             workflow_id="external_named_entity_disambiguation",
             model_extractor=self._call_ned_extractor,
-            max_extraction_retries=self.max_verifier_retries,
+            max_extraction_retries=self.max_dsl_retries,
         )
         result = driver.run(env, task_index=index)
         self._finalize_general_runtime_result(result, env)
@@ -95,7 +95,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
         driver = CanonicalGeneralRuntimeDriver(
             workflow_id=workflow_id,
             model_extractor=self._call_case_routing_extractor,
-            max_extraction_retries=self.max_verifier_retries,
+            max_extraction_retries=self.max_dsl_retries,
         )
         result = driver.run(env, task_index=index)
         self._finalize_general_runtime_result(result, env)
@@ -108,7 +108,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
         messages = [{"role": "user", "content": query.strip()}]
         router = InternalWorkflowRouter(
             model_extractor=self._call_case_routing_extractor,
-            max_retries=self.max_verifier_retries,
+            max_retries=self.max_dsl_retries,
         )
         route = router.route(query.strip(), query.strip())
         route_info = dict(router.last_info)
@@ -119,7 +119,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
             driver = CanonicalGeneralRuntimeDriver(
                 workflow_id=route.route,
                 model_extractor=self._call_case_routing_extractor,
-                max_extraction_retries=self.max_verifier_retries,
+                max_extraction_retries=self.max_dsl_retries,
             )
             result = driver.run(
                 env,
@@ -154,7 +154,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
         messages = [{"role": "user", "content": query.strip()}]
         router = ExternalFacingRouter(
             model_extractor=self._call_external_router_extractor,
-            max_retries=self.max_verifier_retries,
+            max_retries=self.max_dsl_retries,
         )
         route_history = []
         result = None
@@ -254,7 +254,7 @@ class ChatAgentGeneralRuntimeDSL(ChatAgentDSL):
             workflow_id=workflow_id,
             model_extractor=extractor,
             external_router=router,
-            max_extraction_retries=self.max_verifier_retries,
+            max_extraction_retries=self.max_dsl_retries,
         )
         return driver.run(
             env,

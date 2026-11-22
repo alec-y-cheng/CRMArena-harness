@@ -73,14 +73,7 @@ LEAD_DSL_EXTRACTOR_MAX_TOKENS="${LEAD_DSL_EXTRACTOR_MAX_TOKENS:-1800}"
 LEAD_DSL_DISABLE_THINKING="${LEAD_DSL_DISABLE_THINKING:-true}"
 export LEAD_DSL_EXTRACTOR_MAX_TOKENS
 export LEAD_DSL_DISABLE_THINKING
-USE_SYNTACTIC_VERIFIER="${USE_SYNTACTIC_VERIFIER:-false}"
-MAX_VERIFIER_RETRIES="${MAX_VERIFIER_RETRIES:-3}"
-USE_WORKING_MEMORY="${USE_WORKING_MEMORY:-false}"
-WORKING_MEMORY_MAX_CHARS="${WORKING_MEMORY_MAX_CHARS:-1200}"
-USE_QUOTE_CLIPBOARD="${USE_QUOTE_CLIPBOARD:-false}"
-QUOTE_CLIPBOARD_MAX_CHARS="${QUOTE_CLIPBOARD_MAX_CHARS:-1000}"
-USE_LEAD_CLIPBOARD="${USE_LEAD_CLIPBOARD:-false}"
-LEAD_CLIPBOARD_MAX_CHARS="${LEAD_CLIPBOARD_MAX_CHARS:-1000}"
+MAX_DSL_RETRIES="${MAX_DSL_RETRIES:-3}"
 ROUTING_MODE="${ROUTING_MODE:-deterministic}"
 ROUTING_MIN_CONFIDENCE="${ROUTING_MIN_CONFIDENCE:-0.55}"
 SCAFFOLD_MODE="${SCAFFOLD_MODE:-routed}"
@@ -175,30 +168,6 @@ if [[ "$INTERACTIVE" == "true" ]]; then
   MODE_LABEL="multi-turn"
   INTERACTIVE_ARG=(--interactive)
 fi
-VERIFIER_ARG=()
-VERIFIER_LABEL="noverifier"
-if [[ "$USE_SYNTACTIC_VERIFIER" == "true" ]]; then
-  VERIFIER_ARG=(--use_syntactic_verifier)
-  VERIFIER_LABEL="syntactic_verifier"
-fi
-MEMORY_ARG=()
-MEMORY_LABEL="nowm"
-if [[ "$USE_WORKING_MEMORY" == "true" ]]; then
-  MEMORY_ARG=(--use_working_memory)
-  MEMORY_LABEL="wm"
-fi
-QUOTE_CLIPBOARD_ARG=()
-QUOTE_CLIPBOARD_LABEL=""
-if [[ "$USE_QUOTE_CLIPBOARD" == "true" ]]; then
-  QUOTE_CLIPBOARD_ARG=(--use_quote_clipboard)
-  QUOTE_CLIPBOARD_LABEL="_clipboardv2"
-fi
-LEAD_CLIPBOARD_ARG=()
-LEAD_CLIPBOARD_LABEL=""
-if [[ "$USE_LEAD_CLIPBOARD" == "true" ]]; then
-  LEAD_CLIPBOARD_ARG=(--use_lead_clipboard)
-  LEAD_CLIPBOARD_LABEL="_leadclipboard"
-fi
 TASK_IDS_ARG=()
 if [[ -n "$TASK_IDS_CSV" ]]; then
   TASK_IDS_ARG=(--task_ids "$TASK_IDS_CSV")
@@ -210,7 +179,8 @@ fi
 
 for ORG_TYPE in "${ORG_TYPES[@]}"; do
   for TASK_CATEGORY in "${TASKS[@]}"; do
-    FEATURE_SUFFIX="${RESULT_SUFFIX:-_${VERIFIER_LABEL}_${MEMORY_LABEL}${QUOTE_CLIPBOARD_LABEL}${LEAD_CLIPBOARD_LABEL}}"
+    # Keep the historical suffix so baseline runs can resume existing checkpoints.
+    FEATURE_SUFFIX="${RESULT_SUFFIX:-_noverifier_nowm}"
     RESULT_DIR="results/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${RUN_TAG}${FEATURE_SUFFIX}"
     LOG_DIR="logs/${ORG_TYPE}_${MODE_LABEL}/${AGENT_STRATEGY}_${MODEL_SAFE}_${LOG_TAG}${FEATURE_SUFFIX}"
     mkdir -p "$RESULT_DIR" "$LOG_DIR"
@@ -226,10 +196,7 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
     echo "  max_tasks_per_category=$MAX_TASKS_PER_CATEGORY"
     echo "  task_ids=${TASK_IDS_CSV:-all}"
     echo "  rerun_task_ids=$RERUN_TASK_IDS"
-    echo "  syntactic_verifier=$USE_SYNTACTIC_VERIFIER max_verifier_retries=$MAX_VERIFIER_RETRIES"
-    echo "  working_memory=$USE_WORKING_MEMORY max_chars=$WORKING_MEMORY_MAX_CHARS"
-    echo "  quote_clipboard=$USE_QUOTE_CLIPBOARD max_chars=$QUOTE_CLIPBOARD_MAX_CHARS"
-    echo "  lead_clipboard=$USE_LEAD_CLIPBOARD max_chars=$LEAD_CLIPBOARD_MAX_CHARS"
+    echo "  max_dsl_retries=$MAX_DSL_RETRIES"
     echo "  routing_mode=$ROUTING_MODE routing_min_confidence=$ROUTING_MIN_CONFIDENCE"
     echo "  scaffold_mode=$SCAFFOLD_MODE"
     echo "  log=$LOG_FILE"
@@ -240,7 +207,7 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
       --agent_eval_mode "$EVAL_MODE" \
       --log_dir "$RESULT_DIR" \
       --agent_strategy "$AGENT_STRATEGY" \
-      "${INTERACTIVE_ARG[@]}" \
+      ${INTERACTIVE_ARG[@]+"${INTERACTIVE_ARG[@]}"} \
       --llm_provider "$AGENT_PROVIDER" \
       --judge_model "$JUDGE_MODEL" \
       --judge_provider "$JUDGE_PROVIDER" \
@@ -253,20 +220,13 @@ for ORG_TYPE in "${ORG_TYPES[@]}"; do
       --max_turns "$MAX_TURNS" \
       --max_user_turns "$MAX_USER_TURNS" \
       --max_tasks_per_category "$MAX_TASKS_PER_CATEGORY" \
-      "${TASK_IDS_ARG[@]}" \
-      "${RERUN_TASK_IDS_ARG[@]}" \
+      ${TASK_IDS_ARG[@]+"${TASK_IDS_ARG[@]}"} \
+      ${RERUN_TASK_IDS_ARG[@]+"${RERUN_TASK_IDS_ARG[@]}"} \
       --agent_max_tokens "$AGENT_MAX_TOKENS" \
-      --max_verifier_retries "$MAX_VERIFIER_RETRIES" \
-      --working_memory_max_chars "$WORKING_MEMORY_MAX_CHARS" \
-      --quote_clipboard_max_chars "$QUOTE_CLIPBOARD_MAX_CHARS" \
-      --lead_clipboard_max_chars "$LEAD_CLIPBOARD_MAX_CHARS" \
+      --max_dsl_retries "$MAX_DSL_RETRIES" \
       --routing_mode "$ROUTING_MODE" \
       --routing_min_confidence "$ROUTING_MIN_CONFIDENCE" \
       --scaffold_mode "$SCAFFOLD_MODE" \
-      "${VERIFIER_ARG[@]}" \
-      "${MEMORY_ARG[@]}" \
-      "${QUOTE_CLIPBOARD_ARG[@]}" \
-      "${LEAD_CLIPBOARD_ARG[@]}" \
       --reuse_results \
       --privacy_aware_prompt "$PRIVACY_AWARE_PROMPT" \
       --org_type "$ORG_TYPE" > "$LOG_FILE" 2>&1 &

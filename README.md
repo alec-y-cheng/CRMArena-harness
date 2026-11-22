@@ -38,6 +38,21 @@ This repo contains the evaluation code for the paper "<a href="https://arxiv.org
 
 **Note: This repository is for research purposes only and not for commerical.**
 
+## Workflow harness handoff
+
+The `general_dsl` strategy uses a checked-in JSON workflow spec to control Salesforce retrieval and answer formatting. The model fills in the details of each request and interprets retrieved evidence. The external router can refuse a confidential request before the first Salesforce query.
+
+- Use `python run_tasks.py --help` for the common options and `python run_tasks.py --help-all` for advanced options.
+- Start with the [DSL strategy guide](dsl/README.md) for how `lead_dsl` and `general_dsl` work.
+- Use the [DeltaAI launcher](scripts/deltaai_claude_general_dsl_benchmark.sbatch) to smoke-test or evaluate the seven task categories. It also supports the ReAct baseline.
+- Run these local checks from the repo root with Python dependencies installed. The tests use canned model responses and fake Salesforce observations.
+
+```bash
+python -m unittest discover -s dsl/general_runtime
+python -m unittest discover -s dsl/external_facing
+python -m unittest discover -s crm_sandbox/agents/tests
+bash -n scripts/deltaai_claude_general_dsl_benchmark.sbatch
+```
 
 ## Quickstart
 

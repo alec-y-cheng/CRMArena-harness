@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 import json, os
-from crm_sandbox.agents import ChatAgent, ChatAgentDSL, ChatAgentEWM, ChatAgentGeneralRuntimeDSL, ToolCallAgent
-from crm_sandbox.agents.utils import BEDROCK_MODELS_MAP, TOGETHER_MODELS_MAP, VERTEX_MODELS_MAP
+from crm_sandbox.agents import ChatAgent, ChatAgentDSL, ChatAgentGeneralRuntimeDSL, ToolCallAgent
 from crm_sandbox.data.assets import TASKS_ORIGINAL, SCHEMA_ORIGINAL, TASKS_B2B, TASKS_B2B_INTERACTIVE, TASKS_B2C, TASKS_B2C_INTERACTIVE, B2B_SCHEMA, B2C_SCHEMA, EXTERNAL_FACING_TASKS
 from crm_sandbox.env.env import ChatEnv, ToolEnv, InteractiveChatEnv
 from crm_sandbox.env import TOOLS, TOOLS_FULL
@@ -120,10 +119,8 @@ def run():
     if args.judge_base_url:
         print(f"Judge base URL: {args.judge_base_url}")
     print(f"Agent max output tokens: {args.agent_max_tokens}")
-    print(f"Syntactic verifier: {args.use_syntactic_verifier} (max retries={args.max_verifier_retries})")
-    print(f"Working memory: {args.use_working_memory} (max chars={args.working_memory_max_chars})")
-    print(f"Quote clipboard v2: {args.use_quote_clipboard} (max chars={args.quote_clipboard_max_chars})")
-    print(f"Lead clipboard: {args.use_lead_clipboard} (max chars={args.lead_clipboard_max_chars})")
+    if args.agent_strategy in ("lead_dsl", "general_dsl"):
+        print(f"DSL model-output retries: {args.max_dsl_retries}")
     print(f"Routing mode: {args.routing_mode} (min confidence={args.routing_min_confidence})")
     print(f"Scaffold mode: {args.scaffold_mode}")
     if args.interactive:
@@ -211,7 +208,7 @@ def run():
     print(f"Starting evaluation at {start_time}")
     selected_tasks = {t['idx']: t for t in selected_tasks}
     
-    if args.agent_strategy in ["act", "react", "lead_dsl", "general_dsl", "ewm"]:
+    if args.agent_strategy in ["act", "react", "lead_dsl", "general_dsl"]:
         if args.interactive:
             if args.agent_strategy == "act":
                 raise ValueError(
@@ -306,37 +303,27 @@ def run():
                 f"scaffold_source={scaffold_source}",
                 f"evidence={routing_result.evidence}",
             )
-        if args.agent_strategy in ["react", "lead_dsl", "general_dsl", "ewm"]:
+        if args.agent_strategy in ["react", "lead_dsl", "general_dsl"]:
             agent_cls = ChatAgent
             if args.agent_strategy == "lead_dsl":
                 agent_cls = ChatAgentDSL
             elif args.agent_strategy == "general_dsl":
                 agent_cls = ChatAgentGeneralRuntimeDSL
-            elif args.agent_strategy == "ewm":
-                agent_cls = ChatAgentEWM
+            dsl_options = {"max_dsl_retries": args.max_dsl_retries} if agent_cls is not ChatAgent else {}
             agent = agent_cls(
                 model=agent_model,
                 schema_obj=SCHEMA,
                 eval_mode=args.agent_eval_mode,
                 max_turns=args.max_turns,
-                strategy="react" if args.agent_strategy in ["lead_dsl", "general_dsl", "ewm"] else args.agent_strategy,
+                strategy="react" if args.agent_strategy in ["lead_dsl", "general_dsl"] else args.agent_strategy,
                 provider=args.llm_provider,
                 interactive=args.interactive,
                 agent_type=agent_type,
                 privacy_aware_prompt=args.privacy_aware_prompt,
-                use_syntactic_verifier=args.use_syntactic_verifier,
-                max_verifier_retries=args.max_verifier_retries,
                 agent_max_tokens=args.agent_max_tokens,
                 scaffold_text=scaffold_text,
                 routing_result=routing_result.as_dict(),
-                use_working_memory=args.use_working_memory,
-                working_memory_max_chars=args.working_memory_max_chars,
-                use_quote_clipboard=args.use_quote_clipboard,
-                quote_clipboard_active=task["task"] == "quote_approval",
-                quote_clipboard_max_chars=args.quote_clipboard_max_chars,
-                use_lead_clipboard=args.use_lead_clipboard,
-                lead_clipboard_active=task["task"] == "lead_qualification",
-                lead_clipboard_max_chars=args.lead_clipboard_max_chars,
+                **dsl_options,
             )
             agent.info["scaffold_mode"] = args.scaffold_mode
             agent.info["scaffold_source"] = scaffold_source
@@ -367,8 +354,6 @@ def run():
                 "routing": routing_result.as_dict(),
                 "scaffold_mode": args.scaffold_mode,
                 "scaffold_source": scaffold_source,
-                "quote_clipboard_enabled": args.use_quote_clipboard,
-                "lead_clipboard_enabled": args.use_lead_clipboard,
                 "agent_info": agent_info,
                 "traj": _safe_agent_messages(agent),
             }
@@ -386,8 +371,6 @@ def run():
                 "routing": routing_result.as_dict(),
                 "scaffold_mode": args.scaffold_mode,
                 "scaffold_source": scaffold_source,
-                "quote_clipboard_enabled": args.use_quote_clipboard,
-                "lead_clipboard_enabled": args.use_lead_clipboard,
                 "agent_info": agent_info,
                 "traj": _safe_agent_messages(agent),
             }
@@ -406,219 +389,135 @@ def run():
         time.sleep(1)
     end_time = datetime.now()
     print(f"Finished evaluation at {end_time}")
-    
-if __name__ == "__main__":
-    load_dotenv()
-    parser = argparse.ArgumentParser()
+
+
+def build_parser(show_all=False):
+    parser = argparse.ArgumentParser(description="Run CRMArena or CRMArena-Pro evaluations.")
     parser.add_argument(
-        "--model",
-        type=str,
-        help="The model to use for the agent",
-        default="o1-mini",
-        choices = ["o1-mini", "gpt-4o", "gpt-4-turbo"].extend(BEDROCK_MODELS_MAP.keys()),
+        "--help-all",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Show advanced options for ablations, providers, and checkpoints.",
+    )
+    parser.add_argument("--model", default="o1-mini", help="Agent model name.")
+    parser.add_argument(
+        "--llm_provider",
+        default="bedrock",
+        choices=PROVIDER_CHOICES,
+        metavar=None if show_all else "PROVIDER",
+        help="Agent provider, such as openai or claude_cli.",
     )
     parser.add_argument(
         "--agent_strategy",
-        type=str,
         default="react",
-        choices=["tool_call", "act", "react", "lead_dsl", "general_dsl", "ewm", "tool_call_flex"],
+        choices=["tool_call", "act", "react", "lead_dsl", "general_dsl", "tool_call_flex"],
+        metavar=None if show_all else "STRATEGY",
+        help="Use general_dsl for the workflow harness. Defaults to react.",
     )
     parser.add_argument(
-        "--agent_eval_mode",
-        type=str,
-        default="default",
-        choices=["default", "aided"],
+        "--org_type",
+        default="b2b",
+        choices=["b2b", "b2c", "original"],
+        help="Salesforce benchmark org (default: b2b).",
     )
-    parser.add_argument(
-        "--llm_provider",
-        type=str,
-        default="bedrock",
-        choices=PROVIDER_CHOICES
-    )
-    parser.add_argument(
-        "--judge_model",
-        type=str,
-        default=None,
-        help="Model used by evaluator/judge calls. Defaults to --model.",
-    )
-    parser.add_argument(
-        "--judge_provider",
-        type=str,
-        default=None,
-        choices=PROVIDER_CHOICES,
-        help="LiteLLM provider for evaluator/judge calls. Defaults to --llm_provider.",
-    )
-    parser.add_argument(
-        "--judge_base_url",
-        type=str,
-        default=None,
-        help="Optional OpenAI-compatible base URL for evaluator/judge calls.",
-    )
-    parser.add_argument(
-        "--judge_api_key",
-        type=str,
-        default=None,
-        help="Optional API key for evaluator/judge calls.",
-    )
-    parser.add_argument(
-        "--user_model",
-        type=str,
-        default=None,
-        help="Model used for interactive CRMArena-Pro user simulation. Defaults to --judge_model or --model.",
-    )
-    parser.add_argument(
-        "--user_provider",
-        type=str,
-        default=None,
-        choices=PROVIDER_CHOICES,
-        help="LiteLLM provider for interactive user simulation. Defaults to --judge_provider or --llm_provider.",
-    )
-    parser.add_argument(
-        "--user_base_url",
-        type=str,
-        default=None,
-        help="Optional OpenAI-compatible base URL for interactive user simulation calls.",
-    )
-    parser.add_argument(
-        "--user_api_key",
-        type=str,
-        default=None,
-        help="Optional API key for interactive user simulation calls.",
-    )
-    parser.add_argument(
-        "--task_category",
-        type=str,
-        default="all",
-        help=f"The category of tasks to evaluate. Use 'all', 'default_focus', or a comma-separated subset from: {', '.join(TASK_CATEGORY_CHOICES)}",
-    )
+    task_help = "Task category or comma-separated list. Defaults to all categories."
+    if show_all:
+        task_help += " Options include default_focus and " + ", ".join(TASK_CATEGORY_CHOICES) + "."
+    else:
+        task_help += " For example, knowledge_qa. See --help-all for the full list."
+    parser.add_argument("--task_category", default="all", help=task_help)
+    parser.add_argument("--interactive", action="store_true", help="Enable multi-turn user simulation.")
     parser.add_argument(
         "--max_tasks_per_category",
         type=int,
         default=0,
-        help="Optional cap for smoke tests. 0 means run all selected examples.",
+        help="Cap examples per category for smoke tests. Zero runs all selected examples.",
+    )
+    parser.add_argument("--log_dir", default="logs", help="Directory for result JSON files (default: logs).")
+    parser.add_argument("--reuse_results", action="store_true", help="Resume from an existing results file.")
+    parser.add_argument(
+        "--judge_provider",
+        choices=PROVIDER_CHOICES,
+        metavar=None if show_all else "PROVIDER",
+        help="Judge provider. Defaults to the agent provider.",
     )
     parser.add_argument(
+        "--judge_model",
+        help="Judge model override. Uses the provider default or the agent model when omitted.",
+    )
+
+    advanced = parser.add_argument_group("advanced options")
+
+    def add_advanced(*flags, **kwargs):
+        if not show_all:
+            kwargs["help"] = argparse.SUPPRESS
+        advanced.add_argument(*flags, **kwargs)
+
+    add_advanced(
+        "--agent_eval_mode",
+        default="default",
+        choices=["default", "aided"],
+        help="Select the benchmark prompt mode.",
+    )
+    add_advanced("--judge_base_url", help="OpenAI-compatible base URL for the judge.")
+    add_advanced("--judge_api_key", help="API key for the judge.")
+    add_advanced(
+        "--user_provider",
+        choices=PROVIDER_CHOICES,
+        help="Interactive user provider. Defaults to the judge provider.",
+    )
+    add_advanced(
+        "--user_model",
+        help="Interactive user model override. Uses the provider default or the judge model when omitted.",
+    )
+    add_advanced("--user_base_url", help="OpenAI-compatible base URL for the interactive user.")
+    add_advanced("--user_api_key", help="API key for the interactive user.")
+    add_advanced(
         "--task_ids",
-        type=str,
         default="",
-        help="Optional comma-separated task idx values to run after org/category filtering.",
+        help="Comma-separated task IDs to run within the selected org and categories.",
     )
-    parser.add_argument(
+    add_advanced(
         "--rerun_task_ids",
         action="store_true",
-        help="With --reuse_results and --task_ids, remove matching checkpoint rows before rerunning them.",
+        help="With --reuse_results and --task_ids, replace matching checkpoint rows.",
     )
-    parser.add_argument(
-        "--max_turns",
-        type=int,
-        default=20
-    )
-    parser.add_argument(
-        "--max_user_turns",
-        type=int,
-        default=10
-    )
-    parser.add_argument(
-        "--agent_max_tokens",
-        type=int,
-        default=1024,
-        help="Maximum output tokens requested from the agent model per ReAct step.",
-    )
-    parser.add_argument(
-        "--use_syntactic_verifier",
-        action="store_true",
-        help="Gate parsed ReAct actions with a deterministic SOQL/SOSL verifier before env.step.",
-    )
-    parser.add_argument(
-        "--max_verifier_retries",
-        type=int,
-        default=3,
-        help="Internal verifier repair calls allowed before ending the task.",
-    )
-    parser.add_argument(
-        "--use_working_memory",
-        action="store_true",
-        help="Inject a compact deterministic working-memory state block once per ReAct model prompt.",
-    )
-    parser.add_argument(
-        "--working_memory_max_chars",
-        type=int,
-        default=1200,
-        help="Maximum characters in the injected working-memory state block.",
-    )
-    parser.add_argument(
-        "--use_quote_clipboard",
-        action="store_true",
-        help="Enable quote-approval-only procedural clipboard v2 and response gate.",
-    )
-    parser.add_argument(
-        "--quote_clipboard_max_chars",
-        type=int,
-        default=1000,
-        help="Maximum characters in the injected quote approval clipboard block.",
-    )
-    parser.add_argument(
-        "--use_lead_clipboard",
-        action="store_true",
-        help="Enable lead-qualification-only procedural BANT evidence clipboard.",
-    )
-    parser.add_argument(
-        "--lead_clipboard_max_chars",
-        type=int,
-        default=1000,
-        help="Maximum characters in the injected lead qualification clipboard block.",
-    )
-    parser.add_argument(
+    add_advanced("--max_turns", type=int, default=20, help="Maximum agent turns.")
+    add_advanced("--max_user_turns", type=int, default=10, help="Maximum simulated user turns.")
+    add_advanced("--agent_max_tokens", type=int, default=1024, help="Maximum requested output tokens per ReAct step.")
+    add_advanced("--max_dsl_retries", type=int, default=3, help="Retry cap for DSL routing and extraction responses.")
+    add_advanced(
         "--routing_mode",
-        type=str,
         default="deterministic",
         choices=["none", "deterministic"],
-        help=(
-            "Optional orchestration router. 'deterministic' uses visible query/metadata only; "
-            "'none' preserves the base CRMArena harness."
-        ),
+        help="Select the optional prompt-scaffold router.",
     )
-    parser.add_argument(
+    add_advanced(
         "--routing_min_confidence",
         type=float,
         default=0.55,
-        help="Minimum deterministic routing confidence before falling back to the confidentiality scaffold.",
+        help="Minimum confidence for the prompt-scaffold router.",
     )
-    parser.add_argument(
+    add_advanced(
         "--scaffold_mode",
-        type=str,
         default="routed",
         choices=["none", "task", "routed"],
-        help=(
-            "Optional prompt scaffold injection. 'task' uses the selected benchmark task category; "
-            "'routed' uses the visible-input router prediction; 'none' preserves the base prompt."
-        ),
+        help="Select a prompt scaffold by benchmark category (task) or router prediction (routed).",
     )
-    parser.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Enable interactive mode"
-    )
-    parser.add_argument(
-        "--org_type",
-        type=str,
-        default="b2b",
-        choices=["b2b", "b2c", "original"] # original is the original CRMArena
-    )
-    parser.add_argument(
-        "--reuse_results",
-        action="store_true",
-        help="Reuse results from previous runs"
-    )
-    parser.add_argument(
+    add_advanced(
         "--privacy_aware_prompt",
-        type=lambda x: {'true': True, 'false': False}[x.lower()],
+        type=lambda value: {"true": True, "false": False}[value.lower()],
         default=True,
-        help="Whether to use a privacy-aware prompt. Accepts 'true' or 'false'. (default: %(default)s)"
+        help="Use the privacy-aware ReAct prompt. Accepts true or false.",
     )
-    parser.add_argument("--log_dir", type=str, default="logs")
-    args = parser.parse_args()
-    print(_redacted_args(args))
+    return parser
 
-    run()
-    
+
+if __name__ == "__main__":
+    load_dotenv()
+    args = build_parser().parse_args()
+    if getattr(args, "help_all", False):
+        build_parser(show_all=True).print_help()
+    else:
+        print(_redacted_args(args))
+        run()
